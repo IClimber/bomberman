@@ -1,5 +1,5 @@
 // lobby.js — екран підключення і лоббі: нік, люди кімнати, налаштування, «Я готовий», «Старт», таблиця перемог.
-import { S, COLORS, MODE_NAMES, DIFF_NAMES, cleanName, saveName } from './state.js';
+import { S, COLORS, MODE_NAMES, DIFF_NAMES, VERSION, cleanName, saveName } from './state.js';
 import { net, act, lobbyMembers, startNeed, botsForced, nameOf } from './net.js';
 import { createRoom } from './host.js';
 import { SIZES } from './sim.js';
@@ -18,6 +18,7 @@ export function dot(c) {
 // status() — рядок стану кімнати з попередженнями (HTML лише з власних константних рядків)
 export function initLobby(status) {
   statusFn = status;
+  $('ver').textContent = 'v' + VERSION;
   const nick = $('nick');
   nick.value = S.myName;
   nick.addEventListener('input', () => {
