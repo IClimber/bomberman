@@ -108,8 +108,10 @@
     background: #1f2433e6; border: 1px solid var(--line); font-size: 13px; font-weight: 600; white-space: nowrap;
   }
   .chip.me { border-color: var(--ink); }
+  .chip .nm { overflow: hidden; text-overflow: ellipsis; }
+  .chip .sw, .chip .st { flex-shrink: 0; }
   .chip.dead { opacity: 0.5; text-decoration: line-through; }
-  .chip .st { color: var(--muted); font-weight: 400; }
+  .chip .st { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
   .timer {
     font-family: "Press Start 2P", monospace; font-size: 13px; padding: 9px 12px; border-radius: 10px;
     background: #1f2433e6; border: 1px solid var(--line); white-space: nowrap;
@@ -167,7 +169,8 @@
   .bombBtn.pressed { transform: scale(0.93); }
   .touch .hud { height: auto; flex-wrap: wrap; gap: 6px; padding: 6px 104px 6px 8px; }
   .touch .chips { gap: 4px; }
-  .touch .chip { font-size: 11px; padding: 4px 8px; gap: 4px; }
+  .touch .chip { font-size: 11px; padding: 0 8px; gap: 4px; height: 25px; min-width: 0; }   /* висота — як без емодзі */
+  @media (orientation: landscape) { .touch .chips { flex-wrap: nowrap; } }   /* поле обмежене висотою: чіпи в один рядок, ім'я скорочується */
   .touch .timer { font-size: 10px; padding: 7px 9px; }
   .touch .corner { top: 6px; right: 6px; }
   .endlist span { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }

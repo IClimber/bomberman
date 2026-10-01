@@ -7,7 +7,7 @@ import { moveActor, speedOf, canPlace, makeMap, hashStr, DX, DY, MON } from './s
 import { deadlyAt, kill, applyItem, RES_WIN, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
 import { createRenderer } from './render.js';
 import { initLobby, renderLobby } from './lobby.js';
-import { renderHud, renderNet, toast, initHud } from './hud.js';
+import { renderHud, renderNet, toast, initHud, hudBottom } from './hud.js';
 import { sfx, unlock, isMuted, setMuted } from './audio.js';
 import { initTouch, isTouch, touch, resetTouch } from './touch.js';
 
@@ -244,7 +244,7 @@ function frame() {
 // на телефоні — стрілки й бомба (портрет — знизу, альбом — з боків)
 let padSize = { pad: 150, btn: 96, w: 0, h: 0 };
 function insets() {
-  const hud = $('hud'), top = hud.classList.contains('show') ? hud.getBoundingClientRect().bottom + 6 : 62;
+  const top = $('hud').classList.contains('show') ? hudBottom() + 6 : 62;
   if (!isTouch) return { top, bottom: 48, left: 14, right: 14 };
   if (padSize.w !== innerWidth || padSize.h !== innerHeight) {
     const css = getComputedStyle(document.documentElement);

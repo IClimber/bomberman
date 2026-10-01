@@ -5,6 +5,7 @@ import { net, act, startNeed } from './net.js';
 import { sfx } from './audio.js';
 import { dot } from './lobby.js';
 import { RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
+import { MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -28,6 +29,27 @@ const fmt = (ms) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
+const statsText = (nb, fp, sp, ps, rs) => `💣${nb} 🔥${fp}${sp ? ` 👟${sp}` : ''}${ps ? ' 👻' : ''}${rs ? ' 🛡' : ''}`;
+const SD_TEXT = 'РАПТОВА СМЕРТЬ';
+function chipEls(items) {
+  return items.map(([c, name, stats, alive, me]) => {
+    const el = document.createElement('div');
+    el.className = 'chip' + (me ? ' me' : '') + (alive ? '' : ' dead');
+    const nm = document.createElement('span'), st = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = name;
+    st.className = 'st';
+    st.textContent = stats;
+    el.append(dot(c), nm, st);
+    return el;
+  });
+}
+
+// Нижній край HUD для відступу поля — не менший, ніж за найширших чіпів (усі бонуси в усіх) і «РАПТОВА СМЕРТЬ».
+// Інакше на телефоні смерть, бонус чи раптова смерть міняють кількість рядків чіпів, і поле стрибає по вертикалі.
+let reserveKey = '', reserve = 0;
+export const hudBottom = () => Math.max($('hud').getBoundingClientRect().bottom, reserve);
+
 let chipsKey = '';
 // Викликається щокадру: оновлює лише те, що змінилось
 export function renderHud(now) {
@@ -41,26 +63,28 @@ export function renderHud(now) {
   }
   const items = R.sl.map((s, k) => {
     const me = k === S.mySlot;
-    const stats = s.a ? `💣${s.nb} 🔥${s.fp}${s.sp ? ` 👟${s.sp}` : ''}${s.ps ? ' 👻' : ''}${(me || s.b ? s.rs > now : s.rsOn) ? ' 🛡' : ''}` : '💀';
+    const stats = s.a ? statsText(s.nb, s.fp, s.sp, s.ps, me || s.b ? s.rs > now : s.rsOn) : '💀';
     return [s.c, `${s.n}${me ? ' (ти)' : ''}`, stats, s.a, me];
   });
+  const timer = $('timer');
+  const rk = `${innerWidth}x${innerHeight}:${document.fonts?.status}:${items.map(e => e[1]).join('\n')}`;
+  if (rk !== reserveKey) {                                           // вимірюємо найгірший випадок; нижче все перемалюється
+    reserveKey = rk;
+    chipsKey = '';
+    const worst = statsText(MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS, true, true);
+    $('chips').replaceChildren(...chipEls(items.map(([c, name, , , me]) => [c, name, worst, true, me])));
+    timer.textContent = SD_TEXT;
+    timer.classList.add('sd');
+    reserve = $('hud').getBoundingClientRect().bottom;
+  }
   const key = JSON.stringify(items);
   if (key !== chipsKey) {
     chipsKey = key;
-    $('chips').replaceChildren(...items.map(([c, name, stats, alive, me]) => {
-      const el = document.createElement('div');
-      el.className = 'chip' + (me ? ' me' : '') + (alive ? '' : ' dead');
-      const st = document.createElement('span');
-      st.className = 'st';
-      st.textContent = stats;
-      el.append(dot(c), name, st);
-      return el;
-    }));
+    $('chips').replaceChildren(...chipEls(items));
   }
-  const timer = $('timer'), sd = R.board.sdAt;
-  const left = now < R.t0 ? sd - R.t0 : sd - now;
+  const sd = R.board.sdAt, left = now < R.t0 ? sd - R.t0 : sd - now;
   timer.classList.toggle('sd', left <= 0);
-  timer.textContent = left > 0 ? fmt(left) : 'РАПТОВА СМЕРТЬ';
+  timer.textContent = left > 0 ? fmt(left) : SD_TEXT;
 
   const me = R.sl[S.mySlot];
   const banner = S.mySlot < 0 ? 'Раунд уже йде — ти дивишся. Зіграєш у наступному.'
