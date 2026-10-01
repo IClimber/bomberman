@@ -35,8 +35,7 @@ export const net = createNet({
       },
     },
     cfg: { schema: { m: 'u8', s: 'u8', d: 'u8', b: 'bool' } },        // → хост: змінити налаштування
-    ready: { schema: { r: 'bool', t: 'f64' } },                       // → хост: «Готовий» і коли натиснуто
-    start: { schema: {} },                                            // → хост: «Старт»
+    ready: { schema: { r: 'bool', t: 'f64' } },                       // → хост: «Старт» / «Грати» натиснуто (чи скасовано) і коли
     back: { schema: {} },                                             // → хост: після раунду — усіх у лоббі
     // стан раунду від хоста (~10 Гц і одразу при змінах, повний): підсумок, слоти (боти — з позиціями),
     // монстри, знімок клітинок і активні бомби (для тих, хто дивиться з середини раунду)
@@ -193,7 +192,6 @@ const ON = {
   },
   cfg(d) { if (net.isHost()) host.setCfg(d); },
   ready(d, id) { if (net.isHost()) host.setReady(id, d.r, d.t); },
-  start() { if (net.isHost()) host.tryStart(); },
   back() { if (net.isHost()) host.toLobby(); },
 };
 
@@ -258,7 +256,7 @@ export const act = {
     else net.send('cfg', full, net.hostId());
     hooks.room();
   },
-  ready(r) {                                                       // у лоббі — «Я готовий», після раунду — «Грати»
+  ready(r) {                                                       // у лоббі — «Старт», після раунду — «Грати»
     if (!S.room || (S.room.g && !resultShown())) return;
     const t = net.sharedNow();
     const me = S.room.pp.find(p => p.i === net.id);
@@ -266,11 +264,6 @@ export const act = {
     if (net.isHost()) host.setReady(net.id, r, t);
     else net.send('ready', { r, t }, net.hostId());
     hooks.room();
-  },
-  start() {
-    if (!S.room || S.room.g) return;
-    if (net.isHost()) host.tryStart();
-    else net.send('start', {}, net.hostId());
   },
   back() {
     if (!resultShown()) return;

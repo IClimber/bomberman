@@ -51,14 +51,14 @@ export function setCfg(d) {
   sendLobby();
   hooks.room();
 }
-// У лоббі — «Я готовий»; на підсумку раунду — «Грати»: щойно готових досить, наступний раунд одразу, без лоббі
+// У лоббі — «Старт», на підсумку раунду — «Грати»: щойно готових досить, раунд починається сам
 export function setReady(id, r, t) {
   if (!S.room || (S.room.g && !resultShown())) return;
   addMember(id);
   const p = S.room.pp.find(e => e.i === id);
   p.r = !!r;
   p.rt = r ? t : 0;
-  if (S.room.g && tryStart()) return;
+  if (tryStart()) return;
   sendLobby();
   hooks.room();
 }
@@ -67,7 +67,8 @@ export function toLobby() {
   if (resultShown()) backToLobby();
 }
 
-// Старт: готових не менше, ніж min(учасників лоббі, 4); у раунд — перші 4 за часом «Готовий», боти — на вільні місця
+// Старт: готових («Старт» / «Грати») не менше, ніж min(учасників лоббі, 4); у раунд — перші 4 за часом натискання,
+// боти — на вільні місця
 export function tryStart() {
   if (!S.room || (S.room.g && !resultShown())) return false;
   const members = lobbyMembers(), need = Math.min(members.length, 4);
@@ -168,6 +169,8 @@ function tick() {
   if (!wasHost) { wasHost = true; becameHost(now); }
   for (const p of net.peers()) touchMember(p.id);                  // чий hi ще не дійшов
   prune(pnow);
+  // хтось сховав вкладку чи пішов — решта, можливо, вже всі готові
+  if ((!S.room.g || resultShown()) && S.room.pp.some(p => p.r) && tryStart()) return;
   if (!S.room.g) return;
   const R = S.R;
   if (!R || R.r !== S.room.g) { backToLobby(); return; }          // раунду не знаємо — у лоббі

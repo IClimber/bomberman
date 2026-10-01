@@ -49,8 +49,7 @@ export function initLobby(status) {
   }));
   $('size').onchange = (e) => act.cfg({ s: Number(e.target.value) });
   $('bots').onchange = (e) => act.cfg({ b: e.target.checked });
-  $('readyBtn').onclick = () => { sfx.click(); act.ready(!myEntry()?.r); };
-  $('startBtn').onclick = () => act.start();
+  $('startBtn').onclick = () => { sfx.click(); act.ready(!myEntry()?.r); };   // «Старт» — я готовий; ще раз — скасувати
   const copy = $('copyBtn');
   copy.onclick = async () => {
     try { await navigator.clipboard.writeText(location.href); copy.textContent = 'Скопійовано'; }
@@ -96,17 +95,13 @@ export function renderLobby() {
   $('botsLabel').classList.toggle('dis', forced);
   $('botsLabel').title = forced ? 'У «Один проти одного» самому потрібен хоча б один суперник' : '';
 
-  // кнопки
-  const mine = myEntry();
-  const rb = $('readyBtn');
-  rb.textContent = mine?.r ? 'Готовий ✓' : 'Я готовий';
-  rb.classList.toggle('on', !!mine?.r);
-  const { need, ready, members } = startNeed();
-  const ok = need > 0 && ready >= need;
+  // «Старт» — як «Грати» після раунду: раунд почнеться сам, щойно натиснуть усі (до 4)
+  const mine = !!myEntry()?.r, { need, ready, members } = startNeed();
   const sb = $('startBtn');
-  sb.disabled = !ok;
-  sb.textContent = ok ? 'Старт' : `Старт · готові ${ready} / ${need}`;
-  sb.title = members > 4 ? 'У гру підуть перші 4, хто натиснув «Я готовий»' : '';
+  sb.textContent = need > 1 ? `Старт${mine ? ' ✓' : ''} · ${ready} / ${need}` : 'Старт';
+  sb.classList.toggle('on', mine);
+  sb.classList.toggle('primary', !mine);
+  sb.title = (mine ? 'Натисни ще раз, щоб скасувати. ' : '') + (members > 4 ? 'У гру підуть перші 4, хто натиснув «Старт».' : '');
 
   // таблиця перемог
   const rows = [...room.w].sort((a, b) => (b.a + b.c) - (a.a + a.c) || b.a - a.a);
