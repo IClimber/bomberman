@@ -9,7 +9,8 @@ export function setMuted(v) {
   try { localStorage.setItem('bomberman-mute', muted ? '1' : '0'); } catch {}
   if (master) master.gain.value = muted ? 0 : 0.55;
 }
-// Браузер дозволяє звук лише після дії користувача — викликаємо на першому натисканні
+// Браузер дозволяє звук лише після дії користувача: клавіша, клік, а на тачскріні — коли палець відпускають
+// (pointerup / touchend, але не pointerdown). Викликаємо на кожній такій дії, доки звук не запрацює.
 export function unlock() {
   if (!ac) {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -22,7 +23,12 @@ export function unlock() {
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
-  if (ac.state === 'suspended') ac.resume();
+  if (ac.state === 'running') return;
+  ac.resume().catch(() => {});
+  const s = ac.createBufferSource();                                // iOS: звук «відмикається» лише відтворенням у самій дії
+  s.buffer = ac.createBuffer(1, 1, ac.sampleRate);
+  s.connect(ac.destination);
+  s.start(0);
 }
 const ready = () => ac && !muted && ac.state === 'running';
 

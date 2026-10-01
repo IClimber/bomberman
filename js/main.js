@@ -89,7 +89,7 @@ addEventListener('keyup', (e) => {
   if (d) { const k = held.indexOf(d); if (k >= 0) held.splice(k, 1); }
 });
 addEventListener('blur', () => { held.length = 0; });
-addEventListener('pointerdown', unlock);
+for (const type of ['pointerup', 'touchend', 'click']) addEventListener(type, unlock, { capture: true, passive: true });
 
 function toggleFs() {
   if (document.fullscreenElement) document.exitFullscreen?.();

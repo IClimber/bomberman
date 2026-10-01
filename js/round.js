@@ -4,7 +4,7 @@
 //   rs (стійкий до вогню до, спільний час), bn (лічильник своїх бомб) }
 import {
   makeMap, Board, MON, WALL, RESIST_MS, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS,
-  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, cellOf,
+  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, DX, DY, cellOf,
 } from './sim.js';
 import { monsterStep } from './monsters.js';
 import { botTick, botCanPlace } from './bots.js';
@@ -74,23 +74,7 @@ export function hostStep(R, now, dt, ev) {
   }
   let dangerCache = null;
   const danger = () => dangerCache || (dangerCache = B.danger());
-  let threat = null;
-  if (R.coop) {
-    threat = new Uint8Array(B.map.GW * B.map.GH);
-    for (const m of R.mons) {
-      if (!m.a) continue;
-      const r = MON[m.k].sight ? 3 : 2;
-      for (const [px, py] of [[m.x, m.y], [m.tx ?? m.x, m.ty ?? m.y]]) {
-        const cx = Math.round(px), cy = Math.round(py);
-        for (let dy = -r; dy <= r; dy++) {
-          for (let dx = -r; dx <= r; dx++) {
-            const x = cx + dx, y = cy + dy;
-            if (Math.abs(dx) + Math.abs(dy) <= r && B.inside(x, y)) threat[B.idx(x, y)] = 1;
-          }
-        }
-      }
-    }
-  }
+  const threat = R.coop ? threatMap(R) : null;
   for (const s of R.sl) {
     if (!s.a || !s.b) continue;
     const others = R.sl.filter(e => e.a && e !== s);
@@ -119,6 +103,37 @@ export function hostStep(R, now, dt, ev) {
     if (deadlyAt(R, s.x, s.y, now, s.rs) && kill(R, s.o, now)) { ev.dead(s.o, now); changed = true; }
   }
   return checkEnd(R, now) || changed;
+}
+
+// Клітинки, куди монстр дійде за кілька кроків (переслідувач — за 3, решта — за 2): боти туди не йдуть і там не стоять.
+// Рахуємо шляхом по клітинках, прохідних для цього монстра (привид — крізь блоки), а не відстанню крізь стіни:
+// інакше монстр за стіною «забирав» у бота сховок від власної бомби, і бот не ставив бомб, тупцяючи на місці.
+export function threatMap(R) {
+  const B = R.board, { GW, GH } = B.map, n = GW * GH;
+  const threat = new Uint8Array(n), dist = new Int8Array(n);
+  for (const m of R.mons) {
+    if (!m.a) continue;
+    const kind = MON[m.k], r = kind.sight ? 3 : 2;
+    dist.fill(-1);
+    const q = [];
+    for (const [px, py] of [[m.x, m.y], [m.tx ?? m.x, m.ty ?? m.y]]) {
+      const i = B.idx(Math.round(px), Math.round(py));
+      if (dist[i] < 0) { dist[i] = 0; q.push(i); }
+    }
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h];
+      threat[i] = 1;
+      if (dist[i] >= r) continue;
+      const x = i % GW, y = (i - x) / GW;
+      for (let d = 1; d <= 4; d++) {
+        const nx = x + DX[d], ny = y + DY[d], j = ny * GW + nx;
+        if (dist[j] >= 0 || B.solid(nx, ny, !!kind.ghost)) continue;
+        dist[j] = dist[i] + 1;
+        q.push(j);
+      }
+    }
+  }
+  return threat;
 }
 
 // Підсумок за поточним станом (0 — раунд триває)
