@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  makeMap, Board, moveActor, spiral, suddenDeath, canPlace,
+  makeMap, Board, moveActor, spiral, suddenDeath, canPlace, mulberry32,
   EMPTY, PILLAR, BLOCK, WALL, FUSE_MS, FLAME_MS, SIZES,
 } from '../js/sim.js';
 
@@ -228,4 +228,50 @@ test('рух: по коридору, зупинка перед стіною, д�
   moveActor(r, 4, 1, solid);
   assert.deepEqual(r, { x: 4, y: 1 });
   assert.ok(!canPlace(b, 3, 1) && canPlace(b, 4, 1));
+});
+
+test('детермінізм: багато подій у випадковому порядку надходження — те саме поле, що й за порядком часу', () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const rnd = mulberry32(seed * 7919);
+    const m = makeMap(seed, seed % 3);
+    const evs = [];
+    for (let k = 0; k < 60; k++) {
+      const x = 1 + Math.floor(rnd() * m.w), y = 1 + Math.floor(rnd() * m.h);
+      if (m.cell[at(m, x, y)] !== EMPTY) continue;
+      evs.push({ kind: 'b', e: { o: k % 4, n: k + 1, x, y, t: Math.floor(rnd() * 40000), p: 1 + Math.floor(rnd() * 4) } });
+    }
+    for (let k = 0; k < 20; k++) {
+      const x = 1 + Math.floor(rnd() * m.w), y = 1 + Math.floor(rnd() * m.h);
+      evs.push({ kind: 'p', e: { o: k % 4, x, y, t: Math.floor(rnd() * 40000) } });
+    }
+    const add = (bd, ev) => ev.kind === 'b' ? bd.addBomb(ev.e) : bd.addPick(ev.e);
+    const ref = new Board(m, 0);
+    for (const ev of [...evs].sort((a, b) => a.e.t - b.e.t)) { ref.advance(ev.e.t - 1); add(ref, ev); }
+    ref.advance(60000);
+    const all = new Board(m, 0);                                  // усе одразу — перерахунок з початку
+    for (const ev of evs) add(all, ev);
+    all.advance(60000);
+    const late = new Board(m, 0);                                 // події приходять у випадковому порядку, поле тим часом іде
+    const order = [...evs].sort(() => rnd() - 0.5);
+    let T = 0;
+    for (const ev of order) { T += 700; late.advance(T); add(late, ev); }
+    late.advance(60000);
+    assert.deepEqual(all.snapshot(), ref.snapshot(), `seed ${seed}: усе одразу`);
+    assert.deepEqual(late.snapshot(), ref.snapshot(), `seed ${seed}: із запізненням`);
+  }
+});
+
+test('бомби з тим самим номером, але різним часом — різні бомби; dropEvents прибирає й перераховує', () => {
+  const m = emptyMap();
+  const b = new Board(m, 0);
+  assert.ok(b.addBomb({ o: 2, n: 1, x: 1, y: 1, t: 100, p: 1 }));
+  assert.ok(b.addBomb({ o: 2, n: 1, x: 5, y: 5, t: 300, p: 1 }));   // інший хост, той самий номер
+  assert.ok(!b.addBomb({ o: 2, n: 1, x: 5, y: 5, t: 300, p: 1 }));
+  assert.equal(b.maxN[2], 1);
+  b.advance(400);
+  assert.equal(b.active.size, 2);
+  b.dropEvents((e) => e.t !== 300, () => true);
+  b.advance(500);
+  assert.equal(b.active.size, 1);
+  assert.equal(b.digest(1000).n, 1);
 });

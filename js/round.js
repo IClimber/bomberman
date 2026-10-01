@@ -84,7 +84,8 @@ export function hostStep(R, now, dt, ev) {
       monsters: R.coop ? R.mons.filter(m => m.a) : null,
     };
     if (botTick(s, dt, ctx) && botCanPlace(s, B)) {
-      const b = { o: s.o, n: ++s.bn, x: Math.round(s.x), y: Math.round(s.y), t: now, p: s.fp };
+      s.bn = Math.max(s.bn, B.maxN[s.o] || 0) + 1;                // новий хост продовжує нумерацію
+      const b = { o: s.o, n: s.bn, x: Math.round(s.x), y: Math.round(s.y), t: now, p: s.fp };
       B.addBomb(b);
       B.advance(now);
       dangerCache = null;

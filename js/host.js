@@ -1,7 +1,7 @@
 // host.js — обов'язки хоста: люди лоббі та їхні кольори, налаштування, «Готовий», старт раунду, крок раунду
 // (боти, монстри, кінець), таблиця перемог, повернення в лоббі; розсилка lobby і world.
 // Хост — net.hostId(); новий хост продовжує з останнього отриманого стану.
-import { net, hooks, lobbyMembers, nameOf, seedOf, resultShown } from './net.js';
+import { net, hooks, lobbyMembers, nameOf, seedOf, resultShown, SYNC_LAG } from './net.js';
 import { S, COLORS, q8 } from './state.js';
 import { SIZES, mulberry32 } from './sim.js';
 import { newRound, hostStep, COUNTDOWN_MS, MODE_VS, RES_WIN, RES_TEAM_WIN } from './round.js';
@@ -130,8 +130,9 @@ export function sendWorld(to) {
   const R = S.R;
   if (!R || !S.room || S.room.g !== R.r) return;
   if (!to) lastWorld = performance.now();
+  const ts = Number.isFinite(R.board.T) ? R.board.T : 0, dg = R.board.digest(ts - SYNC_LAG);
   net.send('world', {
-    r: R.r, p: R.p, m: R.m, s: R.s, d: R.d, t0: R.t0, ts: Number.isFinite(R.board.T) ? R.board.T : 0, k: R.res, wn: R.wn,
+    r: R.r, p: R.p, m: R.m, s: R.s, d: R.d, t0: R.t0, ts, k: R.res, wn: R.wn, en: dg.n, eh: dg.h,
     sl: R.sl.map(s => ({
       i: s.i, b: s.b, c: s.c, n: s.n, a: s.a, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv,
       nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs,
@@ -139,6 +140,15 @@ export function sendWorld(to) {
     mo: R.mons.map(m => ({ i: m.i, k: m.k, x: q8(m.x), y: q8(m.y), dr: m.d || 0, a: m.a })),
     g: R.board.snapshot(),
     bo: R.board.activeList(),
+  }, to);
+}
+
+// Усі події раунду — учаснику, що розійшовся з хостом (див. checkSync у net.js)
+export function sendEvents(to) {
+  const R = S.R, B = R.board;
+  net.send('evs', {
+    r: R.r, bo: [...B.bombs.values()], pk: [...B.picks.values()],
+    dd: R.sl.filter(s => !s.a).map(s => ({ o: s.o, t: s.dt })),
   }, to);
 }
 

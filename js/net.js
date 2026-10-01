@@ -3,13 +3,15 @@
 // Стан кімнати й раунду авторитетний у хоста (див. host.js); рух, бомби, смерть і підбір — у власника.
 import { createNet } from 'https://iclimber.github.io/p2p-net/v1/net.js';
 import { S, ID_RE, COLORS, cleanName, uq8 } from './state.js';
-import { SIZES } from './sim.js';
+import { SIZES, FUSE_MS, bombKey, pickKey } from './sim.js';
 import { newRound, kill, MODE_VS } from './round.js';
 import * as host from './host.js';
 
 export const SIGNAL_URL = 'wss://144-172-110-72.sslip.io/ws';
 export const GRACE_MS = 3000;        // сервер сигналізації не відповів за стільки — граємо самі
 export const JOIN_WAIT_MS = 8000;    // у кімнаті хтось є — стільки чекаємо стану від хоста
+export const SYNC_LAG = 1500;        // події, молодші за стільки, ще можуть бути в дорозі — у контрольну суму не входять
+const SYNC_EVERY = 2000;             // просити в хоста список подій не частіше
 
 // Колбеки для інтерфейсу (заповнює main.js)
 export const hooks = {
@@ -45,8 +47,12 @@ export const net = createNet({
         mo: [{ i: 'u16', k: 'u8', x: 'u16', y: 'u16', dr: 'u8', a: 'bool' }],
         g: 'bytes',
         bo: [BOMB],
+        en: 'u16', eh: 'u32',                                         // контрольна сума подій з часом ≤ ts − SYNC_LAG
       },
     },
+    // Учасник пропустив події (зв'язок рвався, сторінку заморожено): звіряємося з хостом
+    sync: { schema: { r: 'f64' } },                                   // → хост: надішли всі події раунду
+    evs: { schema: { r: 'f64', bo: [BOMB], pk: [{ o: 'u8', x: 'u8', y: 'u8', t: 'f64' }], dd: [{ o: 'u8', t: 'f64' }] } },
     // власна поза кожного учасника раунду (~20 Гц): координати, напрям, рух, бонуси
     pos: { broadcast: true, unreliable: true, schema: { r: 'f64', x: 'u16', y: 'u16', dr: 'u8', mv: 'bool', nb: 'u8', fp: 'u8', sp: 'u8', ps: 'bool', rs: 'bool' } },
     bomb: { broadcast: true, schema: { r: 'f64', ...BOMB } },          // поставив власник (бота — хост)
@@ -108,7 +114,8 @@ function hashRoom(str) {
 }
 export { seedOf };
 
-// Подія раунду від гравця: свій слот — лише від нього самого, слот бота — від будь-кого (його шле хост)
+// Подія раунду від гравця: свій слот — лише від нього самого, слот бота — від будь-кого (його шле хост;
+// розбіжності після зміни хоста вирівнює звіряння подій, див. checkSync)
 function slotOk(R, o, from) {
   const s = R.sl[o];
   return !!s && (s.b || s.i === from);
@@ -159,13 +166,30 @@ const ON = {
   },
   dead(d, id) {
     const R = S.R;
-    if (!R || d.r !== R.r || !slotOk(R, d.o, id)) return;
+    if (!R || d.r !== R.r || !slotOk(R, d.o, id) || (R.sl[d.o].b && id !== net.hostId())) return;   // бота — лише від хоста
     if (kill(R, d.o, d.t)) hooks.death(d.o);
   },
   pick(d, id) {
     const R = S.R;
     if (!R || d.r !== R.r || !slotOk(R, d.o, id) || !inField(R, d.x, d.y)) return;
     R.board.addPick(d);
+  },
+  sync(d, id) { if (net.isHost() && S.R && d.r === S.R.r) host.sendEvents(id); },
+  // Усі події раунду від хоста: додаємо, яких бракує (поле перерахується); свої, яких бракує хосту, — розсилаємо знову
+  evs(d, id) {
+    const R = S.R;
+    if (!R || d.r !== R.r || id !== net.hostId() || d.bo.length > 8000 || d.pk.length > 4000) return;
+    const now = net.sharedNow();
+    // події ботів — як у хоста: свої «бомби ботів» з часу, коли ми були відрізані й самі вели ботів, — геть
+    const hb = new Set(d.bo.map(bombKey)), hp = new Set(d.pk.map(pickKey));
+    const own = (o) => !R.sl[o] || !R.sl[o].b;
+    R.board.dropEvents((b) => own(b.o) || hb.has(bombKey(b)), (p) => own(p.o) || hp.has(pickKey(p)));
+    for (const b of d.bo) if (R.sl[b.o] && inField(R, b.x, b.y) && b.p >= 1 && b.p <= 16) R.board.addBomb(b, b.t + FUSE_MS < now - 300);
+    for (const p of d.pk) if (R.sl[p.o] && inField(R, p.x, p.y)) R.board.addPick(p);
+    for (const e of d.dd) if (kill(R, e.o, e.t)) hooks.death(e.o);
+    if (S.mySlot < 0) return;
+    for (const b of R.board.bombs.values()) if (b.o === S.mySlot && !hb.has(bombKey(b))) net.send('bomb', { r: R.r, ...b });
+    for (const p of R.board.picks.values()) if (p.o === S.mySlot && !hp.has(pickKey(p))) net.send('pick', { r: R.r, ...p });
   },
   cfg(d) { if (net.isHost()) host.setCfg(d); },
   ready(d, id) { if (net.isHost()) host.setReady(id, d.r, d.t); },
@@ -190,6 +214,7 @@ function applyWorld(w) {
     const s = R.sl[k];
     if (!s) return;
     if (!e.a && s.a && kill(R, k, now)) hooks.death(k);
+    if (s.b && e.a && !s.a) { s.a = true; s.dt = 0; }              // бот живий у хоста (ми, відрізані, «убили» його самі)
     if (!s.b || !s.a) return;
     s.x = uq8(e.x); s.y = uq8(e.y); s.dr = e.dr; s.mv = e.mv;
     s.nb = e.nb; s.fp = e.fp; s.sp = e.sp; s.ps = e.ps; s.rs = e.rs;
@@ -198,10 +223,29 @@ function applyWorld(w) {
     const m = R.mons.find(x => x.i === e.i);
     if (!m) continue;
     if (!e.a && m.a) { m.a = false; m.dt = now; }
+    if (e.a && !m.a) { m.a = true; m.dt = 0; m.popped = false; }   // так само з монстрами
     if (!m.a) continue;
     m.x = uq8(e.x); m.y = uq8(e.y); m.d = e.dr;
   }
   if (S.mySlot < 0) R.board.setBase(w.g, w.bo, w.ts);              // глядач: поле як у хоста
+  else checkSync(R, w);
+}
+// Учасник рахує поле сам з подій, тож пропущена подія (зв'язок рвався) розсинхронізувала б його назавжди.
+// Звіряємо контрольну суму подій з хостом; не збіглась двічі поспіль — просимо всі події.
+// Свою смерть, якої хост не знає, надсилаємо знову.
+function checkSync(R, w) {
+  const t = performance.now(), me = R.sl[S.mySlot];
+  if (me && !me.a && w.sl[S.mySlot]?.a && t - (R.deadSent || 0) > 1000) {
+    R.deadSent = t;
+    net.send('dead', { r: R.r, o: me.o, t: me.dt });
+  }
+  const cut = w.ts - SYNC_LAG;
+  if (cut <= R.t0) return;
+  const dg = R.board.digest(cut);
+  if (dg.n === w.en && dg.h === w.eh) { R.syncMiss = 0; return; }
+  if (++R.syncMiss < 2 || t - (R.syncAsked || 0) < SYNC_EVERY) return;
+  R.syncAsked = t;
+  net.send('sync', { r: R.r }, net.hostId());
 }
 
 // ---------- Дії гравця (хост виконує сам, інші просять хоста) ----------

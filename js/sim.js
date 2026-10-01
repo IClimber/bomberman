@@ -49,8 +49,14 @@ export function hashStr(str) {
 }
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 export const speedOf = (ups) => BASE_SPEED + SPEED_STEP * ups;
-const bombKey = (b) => b.o * 65536 + b.n;
-const bombLess = (a, b) => a.t < b.t || (a.t === b.t && bombKey(a) < bombKey(b));
+// Ідентичність бомби — слот, номер і час: після зміни хоста (чи коли відрізаний пристрій на мить став хостом)
+// бомби ботів з тим самим номером — різні бомби, і зливатися в одну не повинні
+export const bombKey = (b) => `${b.o}:${b.n}:${b.t}`;
+export const pickKey = (p) => `${p.o}:${p.x}:${p.y}:${p.t}`;
+// Записи подій зберігаємо з хешем — для контрольної суми (digest), якою учасники звіряються з хостом
+const bombRec = (b) => ({ o: b.o, n: b.n, x: b.x, y: b.y, t: b.t, p: b.p, h: hashStr(`b${bombKey(b)}`) });
+const pickRec = (p) => ({ o: p.o, x: p.x, y: p.y, t: p.t, h: hashStr(`p${pickKey(p)}`) });
+const bombLess = (a, b) => a.t < b.t || (a.t === b.t && (a.o < b.o || (a.o === b.o && a.n < b.n)));
 
 // ================= Карта =================
 // Зерно — від кімнати й раунду. Старт — у кутах (слоти 0–3), біля кожного кута три вільні клітинки.
@@ -194,7 +200,8 @@ export class Board {
     this.order = spiral(map);
     this.wallAt = new Float64Array(map.GW * map.GH).fill(Infinity);
     this.order.forEach((i, k) => { this.wallAt[i] = this.sdAt + k * sd.step; });
-    this.bombs = new Map();          // усі відомі бомби раунду: ключ → { o, n, x, y, t, p }
+    this.bombs = new Map();          // усі відомі бомби раунду: ключ → { o, n, x, y, t, p, h }
+    this.maxN = [];                  // найбільший відомий номер бомби слоту — бот продовжує з нього
     this.picks = new Map();          // усі підбори: ключ → { o, x, y, t }
     this.base = { cell: map.cell, item: map.item, shown: new Uint8Array(map.cell.length), T: -Infinity, active: [] };
     this.onBlast = null;             // (bomb) — вибух при «живій» обробці (не при перерахунку), для звуку
@@ -214,7 +221,7 @@ export class Board {
       if (this.map.cell[i] === PILLAR) cell[i] = PILLAR;
     }
     this.base = { cell, item, shown, T, active: active.map(b => ({ ...b })) };
-    for (const b of active) this.bombs.set(bombKey(b), { ...b });
+    for (const b of active) if (!this.bombs.has(bombKey(b))) this.bombs.set(bombKey(b), bombRec(b));
     this.reset();
     return true;
   }
@@ -238,7 +245,8 @@ export class Board {
       this.active.set(i, { b: bb, i, te: bb.t + FUSE_MS });
       inBase.add(bombKey(bb));
     }
-    this.queue = [...this.bombs.values()].filter(x => x.t > b.T && !inBase.has(bombKey(x))).sort((x, y) => bombLess(y, x));   // з кінця — найраніша
+    this.queue = [...this.bombs.values()].filter(x => x.t > b.T && !inBase.has(bombKey(x)))
+      .sort((x, y) => bombLess(x, y) ? 1 : bombLess(y, x) ? -1 : 0);   // з кінця — найраніша (порівняння — число, не bool!)
     this.pickQ = [...this.picks.values()].filter(x => x.t > b.T).sort((x, y) => y.t - x.t);
     this.wallK = 0;
     while (this.wallK < this.order.length && this.wallAt[this.order[this.wallK]] <= b.T) {
@@ -246,12 +254,14 @@ export class Board {
     }
   }
 
-  // Нова бомба (своя, чужа з мережі, бота). false — уже відома.
-  addBomb(b) {
+  // Нова бомба (своя, чужа з мережі, бота). false — уже відома. quiet — давно вибухнула (наздоганяємо пропущене): без звуку.
+  addBomb(b, quiet = false) {
     const k = bombKey(b);
     if (this.bombs.has(k)) return false;
-    const bb = { o: b.o, n: b.n, x: b.x, y: b.y, t: b.t, p: b.p };
+    const bb = bombRec(b);
     this.bombs.set(k, bb);
+    if (bb.n > (this.maxN[bb.o] || 0)) this.maxN[bb.o] = bb.n;
+    if (quiet) this.blasted.add(k);
     if (bb.t < this.T) this.dirty = true;
     else {
       let j = this.queue.length;
@@ -261,9 +271,9 @@ export class Board {
     return true;
   }
   addPick(p) {
-    const k = `${p.o}:${p.x}:${p.y}:${p.t}`;
+    const k = pickKey(p);
     if (this.picks.has(k)) return false;
-    const pp = { o: p.o, x: p.x, y: p.y, t: p.t };
+    const pp = pickRec(p);
     this.picks.set(k, pp);
     if (pp.t < this.T) this.dirty = true;
     else {
@@ -401,6 +411,21 @@ export class Board {
     return out;
   }
   activeList() { return [...this.active.values()].map(a => a.b); }
+  // Прибрати події, яких немає в хоста (відрізаний пристрій на мить сам вів ботів): keep(подія) → false — прибрати
+  dropEvents(keepBomb, keepPick) {
+    let n = 0;
+    for (const [k, b] of this.bombs) if (!keepBomb(b)) { this.bombs.delete(k); n++; }
+    for (const [k, p] of this.picks) if (!keepPick(p)) { this.picks.delete(k); n++; }
+    if (n) this.dirty = true;
+    return n;
+  }
+  // Контрольна сума подій (бомби й підбори) з часом ≤ T: кількість і сума хешів
+  digest(T) {
+    let n = 0, h = 0;
+    for (const e of this.bombs.values()) if (e.t <= T) { n++; h = (h + e.h) >>> 0; }
+    for (const e of this.picks.values()) if (e.t <= T) { n++; h = (h + e.h) >>> 0; }
+    return { n, h };
+  }
 
   // Небезпека для ботів: коли (найраніше) в клітинці буде вогонь від уже поставлених бомб (з ланцюжками й стінами)
   // протягом horizon мс; Infinity — безпечно. Рахується на копії поля.
