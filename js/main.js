@@ -9,6 +9,7 @@ import { createRenderer } from './render.js';
 import { initLobby, renderLobby } from './lobby.js';
 import { renderHud, renderNet, toast, initHud } from './hud.js';
 import { sfx, unlock, isMuted, setMuted } from './audio.js';
+import { initTouch, isTouch, touch, resetTouch } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
 const renderer = createRenderer($('c'));
@@ -66,7 +67,7 @@ hooks.death = (o) => {
   sfx.death();
   if (o !== S.mySlot) toast(`${s.n} вибуває 💀`);
 };
-hooks.hidden = () => { held.length = 0; };
+hooks.hidden = () => { held.length = 0; resetTouch(); };
 
 // ================= Клавіатура =================
 const KEY_DIR = { ArrowUp: 1, KeyW: 1, ArrowRight: 2, KeyD: 2, ArrowDown: 3, KeyS: 3, ArrowLeft: 4, KeyA: 4 };
@@ -88,7 +89,8 @@ addEventListener('keyup', (e) => {
   const d = KEY_DIR[e.code];
   if (d) { const k = held.indexOf(d); if (k >= 0) held.splice(k, 1); }
 });
-addEventListener('blur', () => { held.length = 0; });
+addEventListener('blur', () => { held.length = 0; resetTouch(); });
+initTouch(() => { if (S.R) wantBomb = true; });
 for (const type of ['pointerup', 'touchend', 'click']) addEventListener(type, unlock, { capture: true, passive: true });
 
 function toggleFs() {
@@ -109,7 +111,7 @@ function stepMe(R, now, dt) {
   const s = R.sl[S.mySlot];
   if (!s) return;
   if (!s.a || R.p !== 0 || now < R.t0) { s.mv = false; wantBomb = false; return; }
-  const B = R.board, dir = held[held.length - 1] || 0;
+  const B = R.board, dir = touch.dir || held[held.length - 1] || 0;
   s.mv = false;
   if (dir) {
     s.dr = dir;
@@ -226,15 +228,31 @@ function frame() {
     updateViews(R, dt);
     roundCues(R, now);
   }
+  renderHud(now);
+  const me = playing && R.sl[S.mySlot];
+  $('controls').classList.toggle('show', !!me && me.a && R.p === 0);
   renderer.draw({
-    R: playing ? R : null, now, mySlot: S.mySlot, decor,
+    R: playing ? R : null, now, mySlot: S.mySlot, decor, insets: insets(),
     slots: playing ? R.sl.map(s => ({
       x: s.vx ?? s.x, y: s.vy ?? s.y, dr: s.dr, mv: s.mv, a: s.a, dt: s.dt, c: s.c,
       resist: s.o === S.mySlot || s.b ? s.rs > now : !!s.rsOn,
     })) : [],
     mons: playing ? R.mons.map(viewOfMon) : [],
   });
-  renderHud(now);
+}
+// Місце під інтерфейс навколо поля (CSS px): HUD зверху; на комп'ютері — напис глядача знизу,
+// на телефоні — стрілки й бомба (портрет — знизу, альбом — з боків)
+let padSize = { pad: 150, btn: 96, w: 0, h: 0 };
+function insets() {
+  const hud = $('hud'), top = hud.classList.contains('show') ? hud.getBoundingClientRect().bottom + 6 : 62;
+  if (!isTouch) return { top, bottom: 48, left: 14, right: 14 };
+  if (padSize.w !== innerWidth || padSize.h !== innerHeight) {
+    const css = getComputedStyle(document.documentElement);
+    padSize = { pad: parseFloat(css.getPropertyValue('--pad')) || 150, btn: parseFloat(css.getPropertyValue('--btn')) || 96, w: innerWidth, h: innerHeight };
+  }
+  return innerWidth > innerHeight
+    ? { top, bottom: 10, left: padSize.pad + 24, right: padSize.btn + 24 }
+    : { top, bottom: padSize.pad + 24, left: 8, right: 8 };
 }
 
 // ================= Старт =================

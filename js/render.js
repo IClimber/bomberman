@@ -4,8 +4,6 @@
 import { PILLAR, BLOCK, WALL, FUSE_MS, FLAME_MS, DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST } from './sim.js';
 import { COLORS } from './state.js';
 
-const TOP = 62;                      // місце під HUD зверху (CSS px)
-const BOTTOM = 48;                   // місце під напис для глядача знизу
 const MARGIN = 14;
 const PAD = 30;                      // поле тіні навколо карти в кеші (CSS px)
 const WALL_WARN_MS = 1500;           // клітинка, куди скоро впаде стіна, блимає
@@ -34,10 +32,12 @@ export function createRenderer(canvas) {
   }
   resize();
 
-  function layoutFor(map, hud) {
-    const top = (hud ? TOP : MARGIN) * dpr, bot = (hud ? BOTTOM : MARGIN) * dpr, m = MARGIN * dpr;
-    const ts = Math.max(8, Math.floor(Math.min((W - 2 * m) / map.GW, (H - top - bot) / map.GH)));
-    return { ts, ox: Math.floor((W - ts * map.GW) / 2), oy: Math.floor(top + (H - top - bot - ts * map.GH) / 2) };
+  // ins — місце під інтерфейс з боків поля (CSS px): HUD зверху, напис або кнопки телефона знизу / з боків
+  function layoutFor(map, ins) {
+    const { top, bottom, left, right } = ins || { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN };
+    const t = top * dpr, b = bottom * dpr, l = left * dpr, r = right * dpr;
+    const ts = Math.max(6, Math.floor(Math.min((W - l - r) / map.GW, (H - t - b) / map.GH)));
+    return { ts, ox: Math.floor(l + (W - l - r - ts * map.GW) / 2), oy: Math.floor(t + (H - t - b - ts * map.GH) / 2) };
   }
 
   // ---------- Кеш: статичний шар і спрайти клітинок ----------
@@ -83,14 +83,14 @@ export function createRenderer(canvas) {
 
   // ---------- Кадр ----------
   // v: { R, now, mySlot, slots [{x, y, dr, mv, a, dt, c, rs}] — як малювати слоти, mons — як малювати монстрів,
-  //      decor — карта для тла лоббі (коли раунду немає) }
+  //      decor — карта для тла лоббі (коли раунду немає), insets — місце під інтерфейс (див. layoutFor) }
   function draw(v) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#141722';
     ctx.fillRect(0, 0, W, H);
     const map = v.R ? v.R.map : v.decor;
     if (!map) return;
-    const L = layoutFor(map, !!v.R);
+    const L = layoutFor(map, v.R ? v.insets : null);
     ensureCache(map, L);
     const { ts, ox, oy } = L, T = v.now;
     ctx.save();
