@@ -61,6 +61,7 @@ export const net = createNet({
   },
   onPeerGone(id) {
     S.pos.delete(id);
+    S.gone.add(id);
     if (net.isHost()) host.memberGone(id);
     hooks.hud();
   },
@@ -119,6 +120,7 @@ const ON = {
     const n = cleanName(d.n) || 'Гравець';
     const was = S.names.get(id);
     S.names.set(id, n);
+    S.gone.delete(id);                                             // повернувся з тим самим id (сторінку розморозили)
     if (net.isHost()) host.touchMember(id);
     if (was !== n) hooks.room();
   },

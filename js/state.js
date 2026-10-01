@@ -29,6 +29,7 @@ export const S = {
   room: null,
   names: new Map(),                  // id → ім'я (з hi)
   pos: new Map(),                    // id → остання поза з pos
+  gone: new Set(),                   // хто вийшов (onPeerGone) — запам'ятовує кожен, щоб прибрав і майбутній хост
   R: null,                           // поточний раунд (round.js); null — лоббі
   mySlot: -1,                        // мій слот у раунді; -1 — глядач
   waiting: false,                    // у кімнаті хтось є — чекаємо стан від хоста

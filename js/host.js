@@ -9,6 +9,7 @@ import { newRound, hostStep, COUNTDOWN_MS, MODE_VS, RES_WIN, RES_TEAM_WIN } from
 export const WORLD_EVERY = 100;      // хост розсилає стан раунду раз на стільки мс (і одразу при змінах)
 export const RESULT_MS = 4500;       // підсумок раунду показуємо стільки, потім — лоббі
 const TICK_MS = 50;
+const STALE_MS = 30000;              // кого стільки не чути, прибираємо з лоббі й раунду (як FORGET_MS у p2p-net)
 
 export function createRoom() {
   if (S.room) return;
@@ -28,7 +29,7 @@ function addMember(id) {
   return true;
 }
 export function touchMember(id) {
-  if (addMember(id)) { sendLobby(); hooks.room(); }
+  if (!S.gone.has(id) && addMember(id)) { sendLobby(); hooks.room(); }
 }
 export function memberGone(id) {
   if (!S.room) return;
@@ -151,6 +152,7 @@ function tick() {
   const now = net.sharedNow();
   if (!wasHost) { wasHost = true; becameHost(now); }
   for (const p of net.peers()) touchMember(p.id);                  // чий hi ще не дійшов
+  prune(pnow);
   if (!S.room.g) return;
   const R = S.R;
   if (!R || R.r !== S.room.g) { backToLobby(); return; }          // раунду не знаємо — у лоббі
@@ -159,6 +161,20 @@ function tick() {
   if (R.p === 1 && now >= R.endT + RESULT_MS) { backToLobby(); return; }
   if (changed || pnow - lastWorld >= WORLD_EVERY) sendWorld();
 }
+// Хто вийшов або давно мовчить — геть із лоббі й раунду. Не лише за onPeerGone у самого хоста: хост міг змінитися
+// (бачив вихід, ще не бувши хостом) або взагалі не знати того гравця (зайшов пізніше).
+const quietSince = new Map();                                      // id → відколи не чути (performance.now)
+function prune(pnow) {
+  const ids = new Set(S.room.pp.map(p => p.i));
+  if (S.R && S.room.g === S.R.r) for (const s of S.R.sl) if (!s.b && s.a) ids.add(s.i);
+  for (const id of ids) {
+    if (id === net.id) continue;
+    if (net.isLive(id) && !S.gone.has(id)) { quietSince.delete(id); continue; }
+    if (!quietSince.has(id)) quietSince.set(id, pnow);
+    if (S.gone.has(id) || pnow - quietSince.get(id) > STALE_MS) { quietSince.delete(id); memberGone(id); }
+  }
+}
+
 // Стали хостом посеред раунду: ботів і монстрів ведемо від останніх відомих позицій
 function becameHost(now) {
   const R = S.R;
