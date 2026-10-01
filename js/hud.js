@@ -1,0 +1,116 @@
+// hud.js — інтерфейс під час раунду: учасники з бонусами, таймер до раптової смерті, напис для глядача,
+// підсумок раунду, тости, рядок «Зв'язок».
+import { S } from './state.js';
+import { net } from './net.js';
+import { dot } from './lobby.js';
+import { RESULT_MS } from './host.js';
+import { RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
+
+const $ = (id) => document.getElementById(id);
+
+export function toast(text, bad = false, ms = 2600) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (bad ? ' bad' : '');
+  el.textContent = text;
+  $('toasts').append(el);
+  setTimeout(() => el.classList.add('out'), ms);
+  setTimeout(() => el.remove(), ms + 450);
+}
+
+const fmt = (ms) => {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
+let chipsKey = '';
+// Викликається щокадру: оновлює лише те, що змінилось
+export function renderHud(now) {
+  const R = S.R, playing = !!R && !!S.room && S.room.g === R.r;
+  $('hud').classList.toggle('show', playing);
+  if (!playing) {
+    $('banner').classList.remove('show');
+    $('result').classList.remove('show');
+    chipsKey = '';
+    return;
+  }
+  const items = R.sl.map((s, k) => {
+    const me = k === S.mySlot;
+    const stats = s.a ? `💣${s.nb} 🔥${s.fp}${s.sp ? ` 👟${s.sp}` : ''}${s.ps ? ' 👻' : ''}${(me || s.b ? s.rs > now : s.rsOn) ? ' 🛡' : ''}` : '💀';
+    return [s.c, `${s.n}${me ? ' (ти)' : ''}`, stats, s.a, me];
+  });
+  const key = JSON.stringify(items);
+  if (key !== chipsKey) {
+    chipsKey = key;
+    $('chips').replaceChildren(...items.map(([c, name, stats, alive, me]) => {
+      const el = document.createElement('div');
+      el.className = 'chip' + (me ? ' me' : '') + (alive ? '' : ' dead');
+      const st = document.createElement('span');
+      st.className = 'st';
+      st.textContent = stats;
+      el.append(dot(c), name, st);
+      return el;
+    }));
+  }
+  const timer = $('timer'), sd = R.board.sdAt;
+  const left = now < R.t0 ? sd - R.t0 : sd - now;
+  timer.classList.toggle('sd', left <= 0);
+  timer.textContent = left > 0 ? fmt(left) : 'РАПТОВА СМЕРТЬ';
+
+  const me = R.sl[S.mySlot];
+  const banner = S.mySlot < 0 ? 'Раунд уже йде — ти дивишся. Зіграєш у наступному.'
+    : !me.a && R.p === 0 ? 'Для тебе раунд скінчився — дивишся до кінця.' : '';
+  $('banner').textContent = banner;
+  $('banner').classList.toggle('show', !!banner);
+
+  const ended = R.p === 1;
+  $('result').classList.toggle('show', ended);
+  if (ended) renderResult(R, now);
+}
+
+let resKey = '';
+function renderResult(R, now) {
+  const left = Math.max(0, Math.ceil(((R.endT || now) + RESULT_MS - now) / 1000));
+  $('resNote').textContent = `Повернення в лоббі через ${left} с`;
+  const key = `${R.r}:${R.res}:${R.wn}`;
+  if (key === resKey) return;
+  resKey = key;
+  const w = R.sl[R.wn];
+  const title = {
+    [RES_WIN]: w ? `Перемога — ${w.n}!` : 'Перемога!',
+    [RES_DRAW]: 'Нічия — загинули всі',
+    [RES_NOBODY]: 'Без переможця',
+    [RES_TEAM_WIN]: 'Перемога команди!',
+    [RES_TEAM_LOSS]: 'Монстри перемогли',
+  }[R.res] || 'Кінець раунду';
+  const good = R.res === RES_TEAM_WIN || (R.res === RES_WIN && R.wn === S.mySlot);
+  const bad = R.res === RES_TEAM_LOSS || (R.res === RES_WIN && S.mySlot >= 0 && R.wn !== S.mySlot);
+  const h = $('resTitle');
+  h.textContent = title;
+  h.className = good ? 'good' : bad ? 'bad' : '';
+  $('resList').replaceChildren(...R.sl.map((s, k) => {
+    const el = document.createElement('span');
+    const what = R.res === RES_WIN && k === R.wn ? '🏆' : s.a ? '❤️' : '💀';
+    el.append(dot(s.c), `${s.n}${s.b ? ' (бот)' : ''}${k === S.mySlot ? ' (ти)' : ''} ${what}`);
+    return el;
+  }));
+}
+
+// З'єднання з кожним гравцем: тип і пінг або «через гравця», якщо прямого з'єднання немає
+let netKey = '';
+export function renderNet(nameOf) {
+  const items = net.peers().map(({ id, direct, stat: st }) => {
+    const text = !direct ? 'через гравця' : !st ? '…' : st.rtt === null ? st.type : `${st.type} ${st.rtt} мс`;
+    const c = S.room?.pp.find(p => p.i === id)?.c ?? null;
+    return [c, `${nameOf(id)}: ${text}`];
+  });
+  const key = JSON.stringify(items);
+  if (key === netKey) return;
+  netKey = key;
+  const el = $('net');
+  el.hidden = !items.length;
+  el.replaceChildren(document.createTextNode('Зв\'язок:'), ...items.map(([c, text]) => {
+    const s = document.createElement('span');
+    s.append(dot(c), text);
+    return s;
+  }));
+}

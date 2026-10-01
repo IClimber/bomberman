@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bomberman</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='46' cy='58' r='36' fill='%23222'/%3E%3Cpath d='M70 30 Q78 14 92 18' stroke='%23c9a36b' stroke-width='7' fill='none'/%3E%3Ccircle cx='92' cy='16' r='8' fill='%23ffc533'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #141722;
+    --panel: #1f2433f2;
+    --panel2: #2a3045;
+    --line: #3a4260;
+    --ink: #eef1f8;
+    --muted: #9aa3bd;
+    --accent: #ffb020;
+    --ok: #39c97a;
+    --bad: #ff5a4f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Rubik", system-ui, sans-serif; color: var(--ink); background: var(--bg);
+    overflow: hidden; user-select: none; -webkit-user-select: none;
+  }
+  #c { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; }
+  button {
+    font: inherit; font-weight: 600; font-size: 15px; color: var(--ink);
+    min-height: 40px; padding: 8px 16px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--panel2); cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--ink); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1b1d26; }
+  button.on { background: #24563c; border-color: var(--ok); color: #dcfbe9; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #6aa8ff; outline-offset: 2px; }
+  .icon { min-width: 40px; padding: 6px 10px; font-size: 17px; }
+  .sw { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: none; box-shadow: 0 0 0 1px #0007; }
+
+  /* ---------- Лоббі ---------- */
+  .overlay {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    padding: 16px; overflow: auto; background: #0b0d1499;
+  }
+  .overlay.show { display: flex; }
+  .card {
+    width: min(560px, 100%); margin: auto; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 18px; padding: 22px; box-shadow: 0 24px 70px #000a;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .card h1, .card h2 {
+    margin: 0; font-family: "Press Start 2P", monospace; font-weight: 400; color: var(--accent);
+    letter-spacing: 1px; text-shadow: 0 3px 0 #0006;
+  }
+  .card h1 { font-size: 26px; text-align: center; }
+  .card h2 { font-size: 16px; line-height: 1.6; text-align: center; }
+  .card h2.good { color: var(--ok); }
+  .card h2.bad { color: var(--bad); }
+  .sub { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; text-align: center; }
+  .sub .warn { display: block; color: var(--bad); }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .row > label { min-width: 92px; color: var(--muted); font-size: 14px; font-weight: 600; }
+  input[type=text], select {
+    font: inherit; font-size: 15px; color: var(--ink); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-height: 40px;
+  }
+  input[type=text] { flex: 1; min-width: 0; user-select: text; -webkit-user-select: text; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; flex-wrap: wrap; }
+  .seg button { border: 0; border-radius: 0; background: transparent; min-height: 38px; padding: 6px 12px; font-size: 14px; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.sel { background: var(--accent); color: #1b1d26; }
+  .check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .check.dis { opacity: 0.6; cursor: default; }
+  .people { display: flex; flex-direction: column; gap: 6px; }
+  .person {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px;
+    background: var(--panel2); font-weight: 600; font-size: 15px;
+  }
+  .person .st { margin-left: auto; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .person .st.ready { color: var(--ok); }
+  .person .st.away { color: #c79a4a; }
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #startBtn { min-width: 170px; }
+  .wins { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .wins th { color: var(--muted); font-weight: 600; text-align: right; padding: 4px 8px; }
+  .wins th:first-child, .wins td:first-child { text-align: left; }
+  .wins td { padding: 5px 8px; text-align: right; border-top: 1px solid var(--line); }
+  .net { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 12px; color: var(--muted); font-size: 12px; }
+  .net span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  details { color: var(--muted); font-size: 14px; line-height: 1.5; }
+  summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+  details ul { margin: 8px 0 0; padding-left: 20px; }
+  .corner { position: fixed; top: 12px; right: 12px; display: flex; gap: 8px; z-index: 5; }
+
+  /* ---------- Гра ---------- */
+  .hud {
+    position: fixed; top: 0; left: 0; right: 0; height: 56px; display: none; align-items: center; gap: 10px;
+    padding: 8px 112px 8px 12px; pointer-events: none;
+  }
+  .hud.show { display: flex; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 0; }
+  .chip {
+    display: flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 999px;
+    background: #1f2433e6; border: 1px solid var(--line); font-size: 13px; font-weight: 600; white-space: nowrap;
+  }
+  .chip.me { border-color: var(--ink); }
+  .chip.dead { opacity: 0.5; text-decoration: line-through; }
+  .chip .st { color: var(--muted); font-weight: 400; }
+  .timer {
+    font-family: "Press Start 2P", monospace; font-size: 13px; padding: 9px 12px; border-radius: 10px;
+    background: #1f2433e6; border: 1px solid var(--line); white-space: nowrap;
+  }
+  .timer.sd { color: #1b1d26; background: var(--bad); border-color: var(--bad); }
+  .banner {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); display: none;
+    padding: 8px 16px; border-radius: 999px; background: #1f2433ee; border: 1px solid var(--line);
+    color: var(--muted); font-weight: 600; font-size: 14px; white-space: nowrap; pointer-events: none;
+  }
+  .banner.show { display: block; }
+  #toasts {
+    position: fixed; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column;
+    align-items: center; gap: 6px; pointer-events: none; z-index: 10;
+  }
+  .toast {
+    padding: 8px 16px; border-radius: 10px; background: #1f2433f0; border: 1px solid var(--line);
+    font-weight: 600; font-size: 14px; transition: opacity 0.4s; box-shadow: 0 6px 20px #0008;
+  }
+  .toast.bad { border-color: var(--bad); color: #ffd6d3; }
+  .toast.out { opacity: 0; }
+  .endlist { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .endlist span { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud" id="hud">
+  <div class="chips" id="chips"></div>
+  <div class="timer" id="timer"></div>
+</div>
+<div class="corner">
+  <button class="icon" id="soundBtn" aria-label="Звук" title="Звук (M)">🔊</button>
+  <button class="icon" id="fsBtn" aria-label="На весь екран" title="На весь екран (F)">⛶</button>
+</div>
+<div class="banner" id="banner"></div>
+<div id="toasts" aria-live="polite"></div>
+
+<div class="overlay show" id="wait">
+  <div class="card">
+    <h1>BOMBERMAN</h1>
+    <p class="sub" id="waitText">Підключаємось до кімнати…</p>
+    <div class="btns"><button id="soloBtn" hidden>Почати без них</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="lobby">
+  <div class="card">
+    <h1>BOMBERMAN</h1>
+    <p class="sub" id="lobbyStatus"></p>
+    <div class="row">
+      <label for="nick">Твій нік</label>
+      <input type="text" id="nick" maxlength="16" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="people" id="people"></div>
+    <div class="row"><label>Режим</label><div class="seg" id="modeSeg"></div></div>
+    <div class="row">
+      <label for="size">Карта</label><select id="size"></select>
+      <label class="check" id="botsLabel"><input type="checkbox" id="bots"> Боти на вільні місця</label>
+    </div>
+    <div class="row"><label>Складність</label><div class="seg" id="diffSeg"></div></div>
+    <div class="btns">
+      <button id="readyBtn">Я готовий</button>
+      <button id="startBtn" class="primary">Старт</button>
+      <button id="copyBtn">Скопіювати лінк</button>
+    </div>
+    <table class="wins" id="wins" hidden>
+      <thead><tr><th>Гравець</th><th>Перемоги</th><th>Командні перемоги</th></tr></thead>
+      <tbody id="winsBody"></tbody>
+    </table>
+    <div class="net" id="net" hidden></div>
+    <details>
+      <summary>Як грати</summary>
+      <ul>
+        <li>WASD або стрілки — рух, пробіл — бомба. F — на весь екран, M — звук.</li>
+        <li>Бомба вибухає через 2,5 с хрестом. Вогонь зупиняють стовпи й блоки; блоки руйнуються, під деякими — бонуси.</li>
+        <li>Вибух убиває всіх, і тебе теж. Бомба підриває сусідні бомби.</li>
+        <li>Бонуси: 💣 +1 бомба, 🔥 +1 до дальності, 👟 швидкість, 👻 прохід крізь бомби, 🛡 10 с стійкості до вогню.</li>
+        <li>«Один проти одного» — до останнього живого. «Команда» — разом проти монстрів: дотик монстра вбиває, перемога — коли монстрів не лишилось.</li>
+        <li>Через 3 хв (на більших картах — пізніше) починається раптова смерть: стіни спіраллю засипають поле.</li>
+        <li>Гра починається, коли всі в лоббі (до 4) натиснуть «Я готовий» і хтось натисне «Старт». Хто прийде посеред раунду — дивиться.</li>
+      </ul>
+    </details>
+  </div>
+</div>
+
+<div class="overlay" id="result">
+  <div class="card">
+    <h2 id="resTitle"></h2>
+    <div class="endlist" id="resList"></div>
+    <p class="sub" id="resNote"></p>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
