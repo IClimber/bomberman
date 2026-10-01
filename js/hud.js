@@ -1,9 +1,9 @@
 // hud.js — інтерфейс під час раунду: учасники з бонусами, таймер до раптової смерті, напис для глядача,
 // підсумок раунду, тости, рядок «Зв'язок».
 import { S } from './state.js';
-import { net } from './net.js';
+import { net, act, startNeed } from './net.js';
+import { sfx } from './audio.js';
 import { dot } from './lobby.js';
-import { RESULT_MS } from './host.js';
 import { RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
 
 const $ = (id) => document.getElementById(id);
@@ -15,6 +15,12 @@ export function toast(text, bad = false, ms = 2600) {
   $('toasts').append(el);
   setTimeout(() => el.classList.add('out'), ms);
   setTimeout(() => el.remove(), ms + 450);
+}
+
+// Кнопки підсумку: «Грати» — готовий до наступного раунду (ще раз — скасувати), «Вийти в лоббі» — усіх у лоббі
+export function initHud() {
+  $('playBtn').onclick = () => { sfx.click(); act.ready(!S.room?.pp.find(p => p.i === net.id)?.r); };
+  $('toLobbyBtn').onclick = () => { sfx.click(); act.back(); };
 }
 
 const fmt = (ms) => {
@@ -64,13 +70,18 @@ export function renderHud(now) {
 
   const ended = R.p === 1;
   $('result').classList.toggle('show', ended);
-  if (ended) renderResult(R, now);
+  if (ended) renderResult(R);
 }
 
 let resKey = '';
-function renderResult(R, now) {
-  const left = Math.max(0, Math.ceil(((R.endT || now) + RESULT_MS - now) / 1000));
-  $('resNote').textContent = `Повернення в лоббі через ${left} с`;
+function renderResult(R) {
+  const mine = !!S.room?.pp.find(p => p.i === net.id)?.r, { need, ready, members } = startNeed();
+  const play = $('playBtn');
+  play.textContent = mine ? `Граю ✓ · ${ready} / ${need}` : need > 1 ? `Грати · ${ready} / ${need}` : 'Грати';
+  play.classList.toggle('on', mine);
+  play.title = mine ? 'Натисни ще раз, щоб скасувати' : '';
+  const who = need >= members ? 'щойно всі натиснуть «Грати»' : `щойно «Грати» натиснуть ${need}`;
+  $('resNote').textContent = `Наступний раунд — ${who}.`;
   const key = `${R.r}:${R.res}:${R.wn}`;
   if (key === resKey) return;
   resKey = key;

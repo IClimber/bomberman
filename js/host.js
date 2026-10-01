@@ -1,13 +1,12 @@
 // host.js — обов'язки хоста: люди лоббі та їхні кольори, налаштування, «Готовий», старт раунду, крок раунду
 // (боти, монстри, кінець), таблиця перемог, повернення в лоббі; розсилка lobby і world.
 // Хост — net.hostId(); новий хост продовжує з останнього отриманого стану.
-import { net, hooks, lobbyMembers, nameOf, seedOf } from './net.js';
+import { net, hooks, lobbyMembers, nameOf, seedOf, resultShown } from './net.js';
 import { S, COLORS, q8 } from './state.js';
 import { SIZES, mulberry32 } from './sim.js';
 import { newRound, hostStep, COUNTDOWN_MS, MODE_VS, RES_WIN, RES_TEAM_WIN } from './round.js';
 
 export const WORLD_EVERY = 100;      // хост розсилає стан раунду раз на стільки мс (і одразу при змінах)
-export const RESULT_MS = 4500;       // підсумок раунду показуємо стільки, потім — лоббі
 const TICK_MS = 50;
 const STALE_MS = 30000;              // кого стільки не чути, прибираємо з лоббі й раунду (як FORGET_MS у p2p-net)
 
@@ -52,19 +51,25 @@ export function setCfg(d) {
   sendLobby();
   hooks.room();
 }
+// У лоббі — «Я готовий»; на підсумку раунду — «Грати»: щойно готових досить, наступний раунд одразу, без лоббі
 export function setReady(id, r, t) {
-  if (!S.room || S.room.g) return;
+  if (!S.room || (S.room.g && !resultShown())) return;
   addMember(id);
   const p = S.room.pp.find(e => e.i === id);
   p.r = !!r;
   p.rt = r ? t : 0;
+  if (S.room.g && tryStart()) return;
   sendLobby();
   hooks.room();
+}
+// Після раунду — усіх у лоббі (підсумок висить, доки хтось не натисне «Вийти в лоббі» або всі — «Грати»)
+export function toLobby() {
+  if (resultShown()) backToLobby();
 }
 
 // Старт: готових не менше, ніж min(учасників лоббі, 4); у раунд — перші 4 за часом «Готовий», боти — на вільні місця
 export function tryStart() {
-  if (!S.room || S.room.g) return false;
+  if (!S.room || (S.room.g && !resultShown())) return false;
   const members = lobbyMembers(), need = Math.min(members.length, 4);
   const ready = members.filter(p => p.r).sort((a, b) => a.rt - b.rt || (a.i < b.i ? -1 : 1));
   if (!need || ready.length < need) return false;
@@ -157,8 +162,13 @@ function tick() {
   const R = S.R;
   if (!R || R.r !== S.room.g) { backToLobby(); return; }          // раунду не знаємо — у лоббі
   const changed = hostStep(R, now, dt, EV);
-  if (R.p === 1 && !R.scored) { R.scored = true; R.endT = R.endT || now; score(R); sendLobby(); hooks.round(); }
-  if (R.p === 1 && now >= R.endT + RESULT_MS) { backToLobby(); return; }
+  if (R.p === 1 && !R.scored) {                                   // кінець: таблиця, «Грати» — з чистого аркуша
+    R.scored = true;
+    score(R);
+    for (const p of S.room.pp) { p.r = false; p.rt = 0; }
+    sendLobby();
+    hooks.round();
+  }
   if (changed || pnow - lastWorld >= WORLD_EVERY) sendWorld();
 }
 // Хто вийшов або давно мовчить — геть із лоббі й раунду. Не лише за onPeerGone у самого хоста: хост міг змінитися
@@ -182,6 +192,6 @@ function becameHost(now) {
   for (const s of R.sl) s.ai = null;
   for (const m of R.mons) { m.tx = null; m.ty = null; }
   R.endAt = 0;
-  if (R.p === 1) { R.scored = true; R.endT = R.endT || now; }
+  if (R.p === 1) R.scored = true;
 }
 export function startHostLoop() { setInterval(tick, TICK_MS); }

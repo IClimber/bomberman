@@ -7,7 +7,7 @@ import { moveActor, speedOf, canPlace, makeMap, hashStr, DX, DY, MON } from './s
 import { deadlyAt, kill, applyItem, RES_WIN, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
 import { createRenderer } from './render.js';
 import { initLobby, renderLobby } from './lobby.js';
-import { renderHud, renderNet, toast } from './hud.js';
+import { renderHud, renderNet, toast, initHud } from './hud.js';
 import { sfx, unlock, isMuted, setMuted } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
@@ -239,6 +239,7 @@ function frame() {
 
 // ================= Старт =================
 initLobby(statusHtml);
+initHud();
 renderLobby();
 setTimeout(() => { if (!net.status().welcomed && !S.room) createRoom(); }, GRACE_MS);   // сервер мовчить — граємо самі
 addEventListener('hashchange', () => location.reload());              // інша кімната в тій самій вкладці

@@ -142,7 +142,7 @@ export function checkEnd(R, now) {
   if (!res) { R.endAt = 0; return false; }
   if (!R.endAt) { R.endAt = now + END_GRACE_MS; return false; }
   if (now < R.endAt) return false;
-  R.p = 1; R.res = res; R.wn = wn; R.endT = now;
+  R.p = 1; R.res = res; R.wn = wn;
   return true;
 }
 
