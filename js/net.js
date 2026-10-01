@@ -212,7 +212,8 @@ function applyWorld(w) {
     const s = R.sl[k];
     if (!s) return;
     if (!e.a && s.a && kill(R, k, now)) hooks.death(k);
-    if (s.b && e.a && !s.a) { s.a = true; s.dt = 0; }              // бот живий у хоста (ми, відрізані, «убили» його самі)
+    // бот живий у хоста (ми, відрізані, «убили» його самі); людина — якщо ми «прибрали» її, коли були хостом лише для себе
+    if ((s.b || s.pruned) && e.a && !s.a) { s.a = true; s.dt = 0; s.pruned = false; }
     if (!s.b || !s.a) return;
     s.x = uq8(e.x); s.y = uq8(e.y); s.dr = e.dr; s.mv = e.mv;
     s.nb = e.nb; s.fp = e.fp; s.sp = e.sp; s.ps = e.ps; s.rs = e.rs;

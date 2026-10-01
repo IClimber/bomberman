@@ -36,7 +36,7 @@ export function memberGone(id) {
   const R = S.R;
   if (R && R.p === 0) {
     const s = R.sl.find(e => !e.b && e.i === id && e.a);
-    if (s) { s.a = false; s.dt = net.sharedNow(); hooks.death(s.o); sendWorld(); }
+    if (s) { s.a = false; s.dt = net.sharedNow(); s.pruned = true; hooks.death(s.o); sendWorld(); }
   }
   sendLobby();
   hooks.room();
@@ -198,8 +198,10 @@ function prune(pnow) {
   }
 }
 
-// Стали хостом посеред раунду: ботів і монстрів ведемо від останніх відомих позицій
+// Стали хостом: ботів і монстрів ведемо від останніх відомих позицій. «Відколи не чути» — з нуля: записи з минулого
+// разу, коли були хостом, застарілі (інакше короткий обрив через пів хвилини одразу «прибирав» гравця, якого не чути)
 function becameHost(now) {
+  quietSince.clear();
   const R = S.R;
   if (!R) return;
   for (const s of R.sl) s.ai = null;
