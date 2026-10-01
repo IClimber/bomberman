@@ -28,7 +28,7 @@ export const MON = [
   { speed: 1.3, ghost: true },
 ];
 const MON_MIX = [[0.6, 0.3, 0.1], [0.45, 0.35, 0.2], [0.3, 0.4, 0.3]];
-const MON_SAFE = 5;                  // монстри з'являються не ближче (по сітці) до місць старту
+const MON_SAFE = 5, GHOST_SAFE = 8;  // монстри (привиди) з'являються не ближче (по сітці) до місць старту
 
 // Напрями: 0 — стоїть, 1 вгору, 2 вправо, 3 вниз, 4 вліво
 export const DX = [0, 0, 1, 0, -1], DY = [0, -1, 0, 1, 0];
@@ -95,9 +95,13 @@ export function makeMap(seed, sizeIdx, coop = false, diff = 1) {
     shuffle(far, rnd);
     far.sort((a, b) => (cell[a] === EMPTY ? 0 : 1) - (cell[b] === EMPTY ? 0 : 1));   // спершу порожні
     const mix = MON_MIX[diff] ?? MON_MIX[1];
+    const fromStart = (i) => Math.min(...spawns.map(([sx, sy]) => Math.abs(sx - i % GW) + Math.abs(sy - Math.floor(i / GW))));
+    const used = new Set();
     for (let k = 0; k < count && k < far.length; k++) {
-      const i = far[k], u = rnd();
-      const kind = u < mix[0] ? 0 : u < mix[0] + mix[1] ? 1 : 2;
+      const u = rnd(), kind = u < mix[0] ? 0 : u < mix[0] + mix[1] ? 1 : 2;
+      // привид іде крізь блоки, тож з'являється далі: інакше доходить до старту, поки там лише 3 вільні клітинки
+      const i = (MON[kind].ghost && far.find(j => !used.has(j) && fromStart(j) >= GHOST_SAFE)) || far.find(j => !used.has(j));
+      used.add(i);
       if (cell[i] === BLOCK && !MON[kind].ghost) cell[i] = EMPTY;
       mons.push({ i: k + 1, k: kind, x: i % GW, y: Math.floor(i / GW) });
     }
@@ -427,11 +431,11 @@ export class Board {
     return { n, h };
   }
 
-  // Небезпека для ботів: коли (найраніше) в клітинці буде вогонь від уже поставлених бомб (з ланцюжками й стінами)
-  // протягом horizon мс; Infinity — безпечно. Рахується на копії поля.
+  // Небезпека для ботів і монстрів: коли (найраніше) в клітинці буде новий вогонь від уже поставлених бомб (з ланцюжками
+  // й стінами) протягом horizon мс; Infinity — безпечно. Вогонь, що горить зараз, — fireAt/fireUntil: якби він теж ішов
+  // сюди, наступний вибух у тій самій клітинці загубився б, і бот ішов би туди, «бо вже відгоріло». Рахується на копії поля.
   danger(horizon = FUSE_MS + FLAME_MS) {
     const n = this.cell.length, d = new Float64Array(n).fill(Infinity);
-    for (let i = 0; i < n; i++) if (this.fireUntil[i] > this.T) d[i] = this.T;
     const c = Object.create(Board.prototype);
     Object.assign(c, this, {
       cell: Uint8Array.from(this.cell), item: Uint8Array.from(this.item), shown: Uint8Array.from(this.shown),

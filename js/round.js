@@ -66,20 +66,22 @@ export function hostStep(R, now, dt, ev) {
   B.advance(now);
   let changed = false;
   const targets = R.sl.filter(s => s.a);
+  let dangerCache = null;
+  const danger = () => dangerCache || (dangerCache = B.danger());
+  const mctx = { now, t0: R.t0, diff: R.d, danger };
   for (const m of R.mons) {
     if (!m.a) continue;
-    monsterStep(m, dt, B, targets);
+    monsterStep(m, dt, B, targets, mctx);
     const i = cellOf(B.map, m.x, m.y);
     if (B.cell[i] === WALL || B.fireAt(i, now)) { m.a = false; m.dt = now; changed = true; if (ev.monster) ev.monster(m); }
   }
-  let dangerCache = null;
-  const danger = () => dangerCache || (dangerCache = B.danger());
-  const threat = R.coop ? threatMap(R) : null;
+  const threat = R.coop && R.d === 0 ? threatMap(R) : null;
+  const reach = R.coop && R.d > 0 ? monsterReach(R, now) : null;
   for (const s of R.sl) {
     if (!s.a || !s.b) continue;
     const others = R.sl.filter(e => e.a && e !== s);
     const ctx = {
-      board: B, now, diff: R.d, coop: R.coop, danger, threat,
+      board: B, now, diff: R.d, coop: R.coop, danger, threat, reach,
       enemies: R.coop ? R.mons.filter(m => m.a) : others, allies: R.coop ? others : [],
       monsters: R.coop ? R.mons.filter(m => m.a) : null,
     };
@@ -106,7 +108,7 @@ export function hostStep(R, now, dt, ev) {
   return checkEnd(R, now) || changed;
 }
 
-// Клітинки, куди монстр дійде за кілька кроків (переслідувач — за 3, решта — за 2): боти туди не йдуть і там не стоять.
+// «Легко»: клітинки, куди монстр дійде за кілька кроків (переслідувач — за 3, решта — за 2): боти туди не йдуть і там не стоять.
 // Рахуємо шляхом по клітинках, прохідних для цього монстра (привид — крізь блоки), а не відстанню крізь стіни:
 // інакше монстр за стіною «забирав» у бота сховок від власної бомби, і бот не ставив бомб, тупцяючи на місці.
 export function threatMap(R) {
@@ -135,6 +137,40 @@ export function threatMap(R) {
     }
   }
   return threat;
+}
+
+// Коли монстр найраніше може торкнутися того, хто стоїть у клітинці (спільний час): найгірший випадок — монстр іде
+// просто туди найкоротшим шляхом по прохідних для нього клітинках (привид — крізь блоки). Для ботів на «Нормально»
+// і «Важко»: вони обходять клітинки, куди монстр устигне раніше за них, і не стоять там, куди він скоро дійде.
+export function monsterReach(R, now) {
+  const B = R.board, { GW, GH } = B.map, n = GW * GH;
+  const reach = new Float64Array(n).fill(Infinity), dist = new Float64Array(n);
+  for (const m of R.mons) {
+    if (!m.a) continue;
+    const kind = MON[m.k], step = 1000 / kind.speed;
+    const tx = m.tx ?? Math.round(m.x), ty = m.ty ?? Math.round(m.y), fx = Math.round(m.x), fy = Math.round(m.y);
+    const seeds = [[tx, ty, Math.abs(m.x - tx) + Math.abs(m.y - ty)], [fx, fy, Math.abs(m.x - fx) + Math.abs(m.y - fy)]];
+    seeds.sort((a, b) => a[2] - b[2]);                             // черга лишається впорядкованою за відстанню
+    dist.fill(Infinity);
+    const q = [];
+    for (const [x, y, d] of seeds) {
+      const i = B.idx(x, y);
+      if (d < dist[i]) { dist[i] = d; q.push(i); }
+    }
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h], t = now + (dist[i] - TOUCH) * step;
+      if (t < reach[i]) reach[i] = t;
+      if (dist[i] > 12) continue;                                  // далі — не загроза
+      const x = i % GW, y = (i - x) / GW;
+      for (let d = 1; d <= 4; d++) {
+        const nx = x + DX[d], ny = y + DY[d], j = ny * GW + nx;
+        if (dist[j] !== Infinity || B.solid(nx, ny, !!kind.ghost)) continue;
+        dist[j] = dist[i] + 1;
+        q.push(j);
+      }
+    }
+  }
+  return reach;
 }
 
 // Підсумок за поточним станом (0 — раунд триває)

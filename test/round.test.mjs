@@ -4,7 +4,11 @@ import {
   newRound, hostStep, outcome, checkEnd, kill, applyItem, deadlyAt,
   MODE_VS, MODE_COOP, RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, END_GRACE_MS,
 } from '../js/round.js';
-import { IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, RESIST_MS, MAX_BOMBS, BLOCK } from '../js/sim.js';
+import {
+  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, RESIST_MS, MAX_BOMBS, BLOCK, EMPTY, MON, FUSE_MS, makeMap, Board, cellOf,
+} from '../js/sim.js';
+import { monsterReach, TOUCH } from '../js/round.js';
+import { monsterStep } from '../js/monsters.js';
 
 const people = (n, bots = 0) => [
   ...Array.from({ length: n }, (_, k) => ({ i: 'player' + 'abcdefgh'[k] + '0000', b: false, c: k, n: 'P' + k })),
@@ -87,4 +91,58 @@ test('крок хоста: боти ставлять бомби, руйнуют�
     assert.ok(R.board.cell.filter(c => c === BLOCK).length < blocks0);
     if (m === MODE_COOP) assert.notEqual(R.mons.map(x => [x.x, x.y]).join(), mons0);
   }
+});
+
+// Порожня карта 13×11 (лише рамка і стовпи)
+function emptyMap() {
+  const m = makeMap(1, 0);
+  for (let i = 0; i < m.cell.length; i++) if (m.cell[i] === BLOCK) { m.cell[i] = EMPTY; m.item[i] = 0; }
+  return m;
+}
+// Math.random на час f — щоб рішення монстрів були передбачувані
+function withRandom(v, f) {
+  const r = Math.random;
+  Math.random = () => v;
+  try { return f(); } finally { Math.random = r; }
+}
+
+test('монстр і бомба: на «Легко» йде під вибух, на «Нормально» й «Важко» — тікає', () => {
+  const survived = (diff) => withRandom(0, () => {
+    const b = new Board(emptyMap(), 0);
+    b.addBomb({ o: 0, n: 1, x: 5, y: 1, t: 0, p: 2 });   // вогонь — від (3, 1) до (7, 1)
+    const m = { i: 1, k: 0, x: 3, y: 1, d: 2, a: true };
+    const ctx = { now: 0, t0: 0, diff, danger: () => b.danger() };
+    for (let t = 2000; t <= FUSE_MS + 400; t += 50) {   // до вибуху 0,5 с — монстр «бачить» його на всіх рівнях, крім «Легко»
+      b.advance(t);
+      ctx.now = t;
+      monsterStep(m, 0.05, b, [], ctx);
+      if (b.fireAt(cellOf(b.map, m.x, m.y), t)) return false;
+    }
+    return true;
+  });
+  assert.equal(survived(0), false);
+  assert.equal(survived(1), true);
+  assert.equal(survived(2), true);
+});
+
+test('привид не полює перші 20 с раунду і далі, ніж за кілька клітинок', () => {
+  const dir = (now, tx, ty) => withRandom(0, () => {
+    const b = new Board(emptyMap(), 0);
+    b.advance(now);
+    const g = { i: 1, k: 2, x: 5, y: 5, d: 2, a: true };
+    monsterStep(g, 0.01, b, [{ x: tx, y: ty }], { now, t0: 0, diff: 1, danger: () => b.danger() });
+    return g.d;
+  });
+  assert.equal(dir(1000, 5, 1), 2);                  // спокій — іде, куди йшов
+  assert.equal(dir(25000, 5, 1), 1);                 // полює — угору до гравця
+  assert.equal(dir(25000, 13, 11), 2);               // гравець надто далеко
+});
+
+test('досяжність монстрів: шляхом по прохідних для нього клітинках, привид — крізь блоки', () => {
+  const b = new Board(emptyMap(), 0);
+  b.cell[1 * b.map.GW + 1 + b.map.GW] = BLOCK;        // блок у (1, 2): між (1, 1) і (1, 3)
+  const reach = (k) => monsterReach({ board: b, mons: [{ i: 1, k, x: 1, y: 3, a: true }] }, 0)[b.idx(1, 1)];
+  const v = MON[0].speed, gv = MON[2].speed;
+  assert.ok(Math.abs(reach(0) - (6 - TOUCH) / v * 1000) < 1e-6);   // в обхід стовпа: шість кроків
+  assert.ok(Math.abs(reach(2) - (2 - TOUCH) / gv * 1000) < 1e-6);  // крізь блок: два
 });
