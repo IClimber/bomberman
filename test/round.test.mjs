@@ -206,3 +206,29 @@ test('бот тікає з-під вибуху й тоді, коли на зап
   while (t < FUSE_MS + 600) { t += 50; hostStep(R, t, 0.05, noop); }
   assert.ok(bot.a);
 }));
+
+// Два боти на порожній карті без монстрів; m — режим, бот 0 у (x0, y0), бот 1 у (x1, y1)
+function twoBots(m, x0, y0, x1, y1) {
+  const R = newRound({ r: 1, seed: 5, m, s: 0, d: 1, t0: 0, sl: people(0, 2) });
+  R.board = new Board(emptyMap(), 0);
+  R.mons = [];
+  Object.assign(R.sl[0], { x: x0, y: y0 });
+  Object.assign(R.sl[1], { x: x1, y: y1 });
+  return R;
+}
+const firstBomb = (R, until) => {
+  let t = 0, first = 0;
+  const ev = { ...noop, bomb() { if (!first) first = t; } };
+  while (t < until && !first) { t += 50; hostStep(R, t, 0.05, ev); }
+  return first;
+};
+
+test('«Один проти одного» без блоків: двоє ботів сходяться й ставлять бомбу, а не міняються місцями', () => withRandom(0.5, () => {
+  assert.ok(firstBomb(twoBots(MODE_VS, 6, 1, 6, 5), 15000) > 0);
+}));
+
+test('«Команда»: двоє ботів у одній клітинці, кожен на лінії вогню іншого, — один відходить, другий ставить бомбу', () => withRandom(0.5, () => {
+  const R = twoBots(MODE_COOP, 1, 1, 1, 1);
+  R.board.cell[R.board.idx(3, 1)] = BLOCK;
+  assert.ok(firstBomb(R, 15000) > 0);
+}));
