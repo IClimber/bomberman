@@ -1,10 +1,10 @@
 // hud.js — інтерфейс під час раунду: учасники з бонусами, таймер до раптової смерті, напис для глядача,
-// підсумок раунду, тости, рядок «Зв'язок».
-import { S } from './state.js';
+// підсумок раунду, тости, стрічка подій (хто кого вбив, реакції), рядок «Зв'язок».
+import { S, EMOJI } from './state.js';
 import { net, act, startNeed } from './net.js';
 import { sfx } from './audio.js';
 import { dot } from './lobby.js';
-import { RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
+import { RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, KB_WALL, KB_MON, KB_LEFT } from './round.js';
 import { MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS } from './sim.js';
 import { skinOf } from './skins/index.js';
 
@@ -17,6 +17,42 @@ export function toast(text, bad = false, ms = 2600) {
   $('toasts').append(el);
   setTimeout(() => el.classList.add('out'), ms);
   setTimeout(() => el.remove(), ms + 450);
+}
+
+// Стрічка подій праворуч угорі: рядок — текст і кружечки кольорів (dot); зникає за FEED_MS, видно не більше FEED_MAX
+const FEED_MS = 6000, FEED_MAX = 5;
+export function feed(parts) {
+  const el = document.createElement('div');
+  el.className = 'line';
+  el.append(...parts);
+  const box = $('feed');
+  box.append(el);
+  while (box.children.length > FEED_MAX) box.firstChild.remove();
+  setTimeout(() => el.classList.add('out'), FEED_MS);
+  setTimeout(() => el.remove(), FEED_MS + 450);
+}
+const who = (s) => {                                                   // кружечок кольору й ім'я слоту
+  const nm = document.createElement('b');
+  nm.textContent = s.o === S.mySlot ? 'ти' : s.n;
+  return [dot(s.c), nm];
+};
+// Хто кого вбив: «Петро 💣 Оля», «💣 Оля — своя бомба», «👾 Оля», «🧱 Оля», «Оля залишає гру»
+export function feedDeath(R, o) {
+  const s = R.sl[o], k = s?.kb;
+  if (!s) return;
+  const bomb = skinOf().emoji.bomb, killer = R.sl[k];
+  if (k === o) feed([`${bomb} `, ...who(s), ' — своя бомба']);
+  else if (killer) feed([...who(killer), ` ${bomb} `, ...who(s)]);
+  else if (k === KB_WALL) feed(['🧱 ', ...who(s)]);
+  else if (k >= KB_MON && k < KB_MON + 3) feed(['👾 ', ...who(s)]);
+  else if (k === KB_LEFT) feed([...who(s), ' залишає гру']);
+  else feed(['💀 ', ...who(s)]);
+}
+// Реакція того, кого не видно на полі (загинув, дивиться): у стрічку
+export function feedEmo(c, name, e) {
+  const nm = document.createElement('b');
+  nm.textContent = name;
+  feed([dot(c), nm, ` ${EMOJI[e]}`]);
 }
 
 // Кнопки підсумку: «Грати» — готовий до наступного раунду (ще раз — скасувати), «Вийти в лоббі» — усіх у лоббі
@@ -57,6 +93,7 @@ let chipsKey = '';
 export function renderHud(now) {
   const R = S.R, playing = !!R && !!S.room && S.room.g === R.r;
   $('hud').classList.toggle('show', playing);
+  $('feed').style.top = `${(playing ? hudBottom() : 56) + 8}px`;
   if (!playing) {
     $('banner').classList.remove('show');
     $('result').classList.remove('show');
@@ -110,7 +147,8 @@ function renderResult(R) {
   play.title = mine ? 'Натисни ще раз, щоб скасувати' : '';
   const who = need >= members ? 'щойно всі натиснуть «Грати»' : `щойно «Грати» натиснуть ${need}`;
   $('resNote').textContent = `Наступний раунд — ${who}.`;
-  const key = `${R.r}:${R.res}:${R.wn}:${R.sl.map(s => +s.a).join('')}`;   // боти можуть грати й після кінця
+  const kills = (o) => R.sl.filter(e => e.o !== o && e.kb === o).length, mons = (o) => R.mons.filter(m => !m.a && m.kb === o).length;
+  const key = `${R.r}:${R.res}:${R.wn}:${R.sl.map(s => `${+s.a}${s.kb}${kills(s.o)}${mons(s.o)}`).join(',')}`;   // боти можуть грати й після кінця
   if (key === resKey) return;
   resKey = key;
   const w = R.sl[R.wn];
@@ -126,10 +164,17 @@ function renderResult(R) {
   const h = $('resTitle');
   h.textContent = title;
   h.className = good ? 'good' : bad ? 'bad' : '';
+  const bomb = skinOf().emoji.bomb;
   $('resList').replaceChildren(...R.sl.map((s, k) => {
     const el = document.createElement('span');
     const what = R.res === RES_WIN && k === R.wn ? '🏆' : s.a ? '❤️' : '💀';
     el.append(dot(s.c), `${s.n}${s.b ? ' (бот)' : ''}${k === S.mySlot ? ' (ти)' : ''} ${what}`);
+    const by = R.sl[s.kb];                                          // хто вбив
+    const cause = s.a ? '' : s.kb === k ? `${bomb} своя бомба` : by ? `${bomb} ${by.n}` : s.kb === KB_WALL ? '🧱 стіна'
+      : s.kb >= KB_MON && s.kb < KB_MON + 3 ? '👾 монстр' : s.kb === KB_LEFT ? '🚪 вихід з гри' : '';
+    const n = kills(k), m = mons(k);                                // кого вбив сам
+    const info = [cause && `← ${cause}`, n && (R.coop ? `своїх: ${n}` : `жертв: ${n}`), m && `монстрів: ${m}`].filter(Boolean).join(' · ');
+    if (info) { const i = document.createElement('small'); i.textContent = info; el.append(i); }
     return el;
   }));
 }

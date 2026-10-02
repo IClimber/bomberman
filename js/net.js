@@ -2,10 +2,10 @@
 // схеми повідомлень, прийом і перевірка, дії гравця (налаштування, «Готовий», «Старт»).
 // Стан кімнати й раунду авторитетний у хоста (див. host.js); рух, бомби, смерть і підбір — у власника.
 import { createNet } from 'https://iclimber.github.io/p2p-net/v1/net.js';
-import { S, ID_RE, COLORS, cleanName, uq8 } from './state.js';
+import { S, ID_RE, COLORS, EMOJI, cleanName, uq8 } from './state.js';
 import { SIZES, FUSE_MS, bombKey, pickKey } from './sim.js';
 import { SKINS } from './skins/index.js';
-import { newRound, kill, MODE_VS } from './round.js';
+import { newRound, kill, MODE_VS, KB_NONE } from './round.js';
 import * as host from './host.js';
 
 export const SIGNAL_URL = 'wss://144-172-110-72.sslip.io/ws';
@@ -17,10 +17,11 @@ const SYNC_EVERY = 2000;             // просити в хоста списо�
 // Колбеки для інтерфейсу (заповнює main.js)
 export const hooks = {
   room() {}, round() {}, hud() {}, warn() {},
-  blast() {}, death() {}, pickup() {}, bomb() {},
+  blast() {}, death() {}, pickup() {}, bomb() {}, emo() {},
 };
+export const EMO_GAP = 400;          // реакції від одного гравця — не частіше (мс)
 
-const SLOT = { i: 'str', b: 'bool', c: 'u8', n: 'str', a: 'bool', x: 'u16', y: 'u16', dr: 'u8', mv: 'bool', nb: 'u8', fp: 'u8', sp: 'u8', ps: 'bool', rs: 'f64' };
+const SLOT = { i: 'str', b: 'bool', c: 'u8', n: 'str', a: 'bool', kb: 'u8', x: 'u16', y: 'u16', dr: 'u8', mv: 'bool', nb: 'u8', fp: 'u8', sp: 'u8', ps: 'bool', rs: 'f64' };
 const BOMB = { o: 'u8', n: 'u16', x: 'u8', y: 'u8', t: 'f64', p: 'u8' };
 
 export const net = createNet({
@@ -44,7 +45,7 @@ export const net = createNet({
       broadcast: true, unreliable: true, schema: {
         r: 'f64', p: 'u8', m: 'u8', s: 'u8', d: 'u8', t0: 'f64', ts: 'f64', k: 'u8', wn: 'u8',
         sl: [SLOT],
-        mo: [{ i: 'u16', k: 'u8', x: 'u16', y: 'u16', dr: 'u8', a: 'bool' }],
+        mo: [{ i: 'u16', k: 'u8', x: 'u16', y: 'u16', dr: 'u8', a: 'bool', kb: 'u8' }],
         g: 'bytes',
         bo: [BOMB],
         en: 'u16', eh: 'u32',                                         // контрольна сума подій з часом ≤ ts − SYNC_LAG
@@ -52,12 +53,13 @@ export const net = createNet({
     },
     // Учасник пропустив події (зв'язок рвався, сторінку заморожено): звіряємося з хостом
     sync: { schema: { r: 'f64' } },                                   // → хост: надішли всі події раунду
-    evs: { schema: { r: 'f64', bo: [BOMB], pk: [{ o: 'u8', x: 'u8', y: 'u8', t: 'f64' }], dd: [{ o: 'u8', t: 'f64' }] } },
+    evs: { schema: { r: 'f64', bo: [BOMB], pk: [{ o: 'u8', x: 'u8', y: 'u8', t: 'f64' }], dd: [{ o: 'u8', t: 'f64', k: 'u8' }] } },
     // власна поза кожного учасника раунду (~20 Гц): координати, напрям, рух, бонуси
     pos: { broadcast: true, unreliable: true, schema: { r: 'f64', x: 'u16', y: 'u16', dr: 'u8', mv: 'bool', nb: 'u8', fp: 'u8', sp: 'u8', ps: 'bool', rs: 'bool' } },
     bomb: { broadcast: true, schema: { r: 'f64', ...BOMB } },          // поставив власник (бота — хост)
-    dead: { broadcast: true, schema: { r: 'f64', o: 'u8', t: 'f64' } },   // загинув (вирішує сам; бота — хост)
+    dead: { broadcast: true, schema: { r: 'f64', o: 'u8', t: 'f64', k: 'u8' } },   // загинув (вирішує сам; бота — хост); k — хто вбив (KB_*)
     pick: { broadcast: true, schema: { r: 'f64', o: 'u8', x: 'u8', y: 'u8', t: 'f64' } },   // підібрав бонус
+    emo: { broadcast: true, schema: { e: 'u8' } },                   // реакція (індекс EMOJI у state.js)
   },
   hasGame: () => !!S.room,
   onMessage: (kind, d, from) => ON[kind](d, from),
@@ -167,12 +169,18 @@ const ON = {
   dead(d, id) {
     const R = S.R;
     if (!R || d.r !== R.r || !slotOk(R, d.o, id) || (R.sl[d.o].b && id !== net.hostId())) return;   // бота — лише від хоста
-    if (kill(R, d.o, d.t)) hooks.death(d.o);
+    if (kill(R, d.o, d.t, d.k)) hooks.death(d.o);
   },
   pick(d, id) {
     const R = S.R;
     if (!R || d.r !== R.r || !slotOk(R, d.o, id) || !inField(R, d.x, d.y)) return;
     R.board.addPick(d);
+  },
+  emo(d, id) {
+    const t = performance.now(), was = S.emo.get(id);
+    if (d.e >= EMOJI.length || (was && t - was.at < EMO_GAP)) return;
+    S.emo.set(id, { e: d.e, at: t });
+    hooks.emo(id, d.e);
   },
   sync(d, id) { if (net.isHost() && S.R && d.r === S.R.r) host.sendEvents(id); },
   // Усі події раунду від хоста: додаємо, яких бракує (поле перерахується); свої, яких бракує хосту, — розсилаємо знову
@@ -186,7 +194,7 @@ const ON = {
     R.board.dropEvents((b) => own(b.o) || hb.has(bombKey(b)), (p) => own(p.o) || hp.has(pickKey(p)));
     for (const b of d.bo) if (R.sl[b.o] && inField(R, b.x, b.y) && b.p >= 1 && b.p <= 16) R.board.addBomb(b, b.t + FUSE_MS < now - 300);
     for (const p of d.pk) if (R.sl[p.o] && inField(R, p.x, p.y)) R.board.addPick(p);
-    for (const e of d.dd) if (kill(R, e.o, e.t)) hooks.death(e.o);
+    for (const e of d.dd) if (kill(R, e.o, e.t, e.k)) hooks.death(e.o);
     if (S.mySlot < 0) return;
     for (const b of R.board.bombs.values()) if (b.o === S.mySlot && !hb.has(bombKey(b))) net.send('bomb', { r: R.r, ...b });
     for (const p of R.board.picks.values()) if (p.o === S.mySlot && !hp.has(pickKey(p))) net.send('pick', { r: R.r, ...p });
@@ -212,9 +220,10 @@ function applyWorld(w) {
   w.sl.forEach((e, k) => {
     const s = R.sl[k];
     if (!s) return;
-    if (!e.a && s.a && kill(R, k, now)) hooks.death(k);
+    if (!e.a && s.a && kill(R, k, now, e.kb)) hooks.death(k);
+    if (!e.a && !s.a && s.kb === KB_NONE) s.kb = e.kb;               // хто вбив — dead міг загубитися
     // бот живий у хоста (ми, відрізані, «убили» його самі); людина — якщо ми «прибрали» її, коли були хостом лише для себе
-    if ((s.b || s.pruned) && e.a && !s.a) { s.a = true; s.dt = 0; s.pruned = false; }
+    if ((s.b || s.pruned) && e.a && !s.a) { s.a = true; s.dt = 0; s.kb = KB_NONE; s.pruned = false; }
     if (!s.b || !s.a) return;
     s.x = uq8(e.x); s.y = uq8(e.y); s.dr = e.dr; s.mv = e.mv;
     s.nb = e.nb; s.fp = e.fp; s.sp = e.sp; s.ps = e.ps; s.rs = e.rs;
@@ -223,6 +232,7 @@ function applyWorld(w) {
     const m = R.mons.find(x => x.i === e.i);
     if (!m) continue;
     if (!e.a && m.a) { m.a = false; m.dt = now; }
+    if (!e.a) m.kb = e.kb;
     if (e.a && !m.a) { m.a = true; m.dt = 0; m.popped = false; }   // так само з монстрами
     if (!m.a) continue;
     m.x = uq8(e.x); m.y = uq8(e.y); m.d = e.dr;
@@ -237,7 +247,7 @@ function checkSync(R, w) {
   const t = performance.now(), me = R.sl[S.mySlot];
   if (me && !me.a && w.sl[S.mySlot]?.a && t - (R.deadSent || 0) > 1000) {
     R.deadSent = t;
-    net.send('dead', { r: R.r, o: me.o, t: me.dt });
+    net.send('dead', { r: R.r, o: me.o, t: me.dt, k: me.kb });
   }
   const cut = w.ts - SYNC_LAG;
   if (cut <= R.t0) return;
@@ -274,6 +284,13 @@ export const act = {
   },
   name(n) {
     net.send('hi', { n });
+  },
+  emo(e) {                                                         // реакція: над своїм гравцем чи в стрічці подій
+    const t = performance.now(), was = S.emo.get(net.id);
+    if (was && t - was.at < EMO_GAP) return;
+    S.emo.set(net.id, { e, at: t });
+    net.send('emo', { e });
+    hooks.emo(net.id, e);
   },
 };
 // Показуємо підсумок раунду (між раундом і лоббі)

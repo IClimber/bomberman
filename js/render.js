@@ -157,6 +157,7 @@ export function createRenderer(canvas) {
     // гравці: спершу мертві, згори — живі, свій — найвище
     const order = v.slots.map((s, k) => k).sort((a, b) => (v.slots[a].a - v.slots[b].a) || ((a === v.mySlot) - (b === v.mySlot)));
     for (const k of order) drawPlayer(ctx, sk, v.slots[k], ts, T, k === v.mySlot && T < R.t0 + 2500);
+    for (const k of order) if (v.slots[k].a && v.slots[k].emo) drawEmo(ctx, v.slots[k], ts, dpr);
     ctx.restore();
 
     // відлік і написи
@@ -214,6 +215,28 @@ function drawPlayer(g, sk, p, s, T, mark) {
     g.fillStyle = '#fff';
     g.beginPath(); g.moveTo(cx - s * 0.14, ay - s * 0.14); g.lineTo(cx + s * 0.14, ay - s * 0.14); g.lineTo(cx, ay); g.closePath(); g.fill();
   }
+}
+
+// Реакція над гравцем: бульбашка з емодзі (p.emo { ch, k — частка показу 0..1 }) — вискакує, піднімається, згасає
+const EMO_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+function drawEmo(g, p, s, dpr) {
+  const { ch, k } = p.emo;
+  const r = Math.max(s * 0.4, 13 * dpr) * (k < 0.06 ? 0.5 + 0.5 * k / 0.06 : 1);
+  const cx = (p.x + 0.5) * s, cy = (p.y + 0.5) * s - s * 0.55 - r - k * s * 0.15;
+  g.save();
+  g.globalAlpha = k > 0.85 ? (1 - k) / 0.15 : 1;
+  g.fillStyle = 'rgba(255,255,255,0.94)';
+  g.strokeStyle = 'rgba(20,23,34,0.5)'; g.lineWidth = Math.max(1, r * 0.08);
+  g.beginPath();
+  g.arc(cx, cy, r, Math.PI * 0.62, Math.PI * 0.38);
+  g.lineTo(cx, cy + r * 1.35);
+  g.closePath();
+  g.fill(); g.stroke();
+  g.font = `${Math.round(r * 1.15)}px ${EMO_FONT}`;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#000';
+  g.fillText(ch, cx, cy + r * 0.08);
+  g.restore();
 }
 
 // Монстр (стиль малює тіло й очі); привид напівпрозорий і без тіні; загиблий — лопається

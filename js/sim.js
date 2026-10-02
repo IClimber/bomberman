@@ -399,6 +399,15 @@ export class Board {
     return !pass && this.active.has(i);
   }
   fireAt(i, T = this.T) { return this.fireUntil[i] > T; }
+  // Чий вогонь у клітинці i в момент T (слот власника бомби; кілька — найпізніший вибух); -1 — немає
+  fireBy(i, T = this.T) {
+    let o = -1, t0 = -Infinity;
+    for (const f of this.flames) {
+      if (f.t0 > T || f.t1 <= T || f.t0 < t0) continue;
+      if (f.cells.some(c => c[0] === i)) { o = f.o; t0 = f.t0; }
+    }
+    return o;
+  }
   bombAt(i) { return this.active.get(i)?.b || null; }
   itemAt(i) { return this.shown[i] ? this.item[i] : 0; }
   activeOf(o) { let n = 0; for (const a of this.active.values()) if (a.b.o === o) n++; return n; }

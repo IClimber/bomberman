@@ -1,4 +1,5 @@
-// touch.js — сенсорне керування (як у tck): круг зі стрілками ліворуч — веди пальцем, кнопка 💣 праворуч.
+// touch.js — сенсорне керування (як у tck): круг зі стрілками ліворуч — веди пальцем, кнопка 💣 праворуч,
+// над нею 🙂 — рядок реакцій.
 // Мультитач через Pointer Events: кожен елемент тримає свій палець (setPointerCapture).
 // Рух у грі — по клітинках, тож з вектора пальця беремо головну вісь; щоб на діагоналі напрям не смикався,
 // поточна вісь лишається, доки інша не переважить у HYST разів.
@@ -8,8 +9,10 @@ const HYST = 1.3;
 export const isTouch = matchMedia('(pointer: coarse)').matches;
 export const touch = { dir: 0 };
 
-// onBomb — натиснули «💣»
-export function initTouch(onBomb) {
+import { EMOJI } from './state.js';
+
+// onBomb — натиснули «💣», onEmo(k) — реакцію EMOJI[k]
+export function initTouch(onBomb, onEmo) {
   if (!isTouch) return;
   document.documentElement.classList.add('touch');
   const dpad = document.getElementById('dpad'), knob = document.getElementById('knob'), bomb = document.getElementById('bombBtn');
@@ -53,10 +56,21 @@ export function initTouch(onBomb) {
   bomb.addEventListener('pointercancel', up);
   bomb.addEventListener('lostpointercapture', up);
   addEventListener('contextmenu', (e) => e.preventDefault());
+
+  const emo = document.getElementById('emoBtn'), bar = document.getElementById('emoBar');
+  emo.addEventListener('pointerdown', (e) => { e.preventDefault(); bar.classList.toggle('show'); });
+  bar.replaceChildren(...EMOJI.map((ch, k) => {
+    const b = document.createElement('button');
+    b.tabIndex = -1;
+    b.textContent = ch;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); bar.classList.remove('show'); onEmo(k); });
+    return b;
+  }));
 }
 // Відпустити все (вкладка у фоні, втрата фокусу)
 export function resetTouch() {
   touch.dir = 0;
+  document.getElementById('emoBar')?.classList.remove('show');
   const knob = document.getElementById('knob');
   if (knob) knob.style.transform = '';
 }

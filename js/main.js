@@ -1,13 +1,13 @@
 // main.js — головний цикл: клавіатура, свій гравець (рух, бомби, бонуси, смерть), розсилка pos,
 // плавний вигляд інших, звуки подій, малювання; запуск мережі.
-import { S, q8 } from './state.js';
-import { net, hooks, nameOf, GRACE_MS } from './net.js';
+import { S, EMOJI, q8 } from './state.js';
+import { net, hooks, act, nameOf, GRACE_MS } from './net.js';
 import { createRoom, startHostLoop } from './host.js';
 import { moveActor, speedOf, canPlace, makeMap, hashStr, DX, DY, MON } from './sim.js';
-import { deadlyAt, kill, applyItem, RES_WIN, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
+import { killerAt, kill, applyItem, RES_WIN, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
 import { createRenderer } from './render.js';
 import { initLobby, renderLobby } from './lobby.js';
-import { renderHud, renderNet, toast, initHud, hudBottom } from './hud.js';
+import { renderHud, renderNet, toast, initHud, hudBottom, feedDeath, feedEmo } from './hud.js';
 import { sfx, unlock, isMuted, setMuted } from './audio.js';
 import { initTouch, isTouch, touch, resetTouch } from './touch.js';
 
@@ -62,15 +62,25 @@ hooks.round = () => {
 };
 hooks.bomb = () => sfx.place();
 hooks.death = (o) => {
-  const R = S.R, s = R?.sl[o];
-  if (!s) return;
+  const R = S.R;
+  if (!R?.sl[o]) return;
   sfx.death();
-  if (o !== S.mySlot) toast(`${s.n} вибуває 💀`);
+  feedDeath(R, o);
+};
+// Реакція: живого учасника раунду — бульбашкою над ним (див. frame), інших — у стрічку подій
+const EMO_MS = 2600;
+hooks.emo = (id, e) => {
+  const R = S.R, playing = !!R && S.room?.g === R.r;
+  if (!playing) return;
+  const s = R.sl.find(x => !x.b && x.i === id);
+  if (s?.a) return;
+  feedEmo(s ? s.c : S.room.pp.find(p => p.i === id)?.c, s ? s.n : nameOf(id), e);
 };
 hooks.hidden = () => { held.length = 0; resetTouch(); };
 
 // ================= Клавіатура =================
 const KEY_DIR = { ArrowUp: 1, KeyW: 1, ArrowRight: 2, KeyD: 2, ArrowDown: 3, KeyS: 3, ArrowLeft: 4, KeyA: 4 };
+const KEY_EMO = /^(?:Digit|Numpad)([1-9])$/;
 const held = [];                                                       // напрями в порядку натискання; діє останній
 let wantBomb = false;
 addEventListener('keydown', (e) => {
@@ -82,6 +92,9 @@ addEventListener('keydown', (e) => {
     if (S.R) e.preventDefault();
   } else if (e.code === 'Space') {
     if (S.R) { e.preventDefault(); if (!e.repeat) wantBomb = true; }
+  } else if (KEY_EMO.test(e.code) && S.R && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const k = Number(KEY_EMO.exec(e.code)[1]) - 1;
+    if (k < EMOJI.length && S.room?.g === S.R.r) act.emo(k);
   } else if (e.code === 'KeyF' && !e.ctrlKey && !e.metaKey) toggleFs();
   else if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) toggleMute();
 });
@@ -90,7 +103,7 @@ addEventListener('keyup', (e) => {
   if (d) { const k = held.indexOf(d); if (k >= 0) held.splice(k, 1); }
 });
 addEventListener('blur', () => { held.length = 0; resetTouch(); });
-initTouch(() => { if (S.R) wantBomb = true; });
+initTouch(() => { if (S.R) wantBomb = true; }, (k) => act.emo(k));
 for (const type of ['pointerup', 'touchend', 'click']) addEventListener(type, unlock, { capture: true, passive: true });
 
 function toggleFs() {
@@ -138,9 +151,11 @@ function stepMe(R, now, dt) {
     sfx.pick();
     toast(ITEM_TEXT[it]);
   }
-  if (deadlyAt(R, s.x, s.y, now, s.rs, R.mons.map(viewOfMon)) && kill(R, s.o, now)) {
-    net.send('dead', { r: R.r, o: s.o, t: now });
+  const kb = killerAt(R, s.x, s.y, now, s.rs, R.mons.map(viewOfMon));
+  if (kb >= 0 && kill(R, s.o, now, kb)) {
+    net.send('dead', { r: R.r, o: s.o, t: now, k: kb });
     sfx.death();
+    feedDeath(R, s.o);
   }
 }
 
@@ -193,6 +208,11 @@ function updateViews(R, dt) {
     smooth(m, tx, ty, dt);
   }
 }
+// Реакція над гравцем: { ch (емодзі), k (0..1 — частка показу) } або null
+function emoOf(s, pnow) {
+  const e = !s.b && S.emo.get(s.o === S.mySlot ? net.id : s.i);
+  return e && pnow - e.at < EMO_MS ? { ch: EMOJI[e.e], k: (pnow - e.at) / EMO_MS } : null;
+}
 const viewOfMon = (m) => ({ i: m.i, k: m.k, x: m.vx ?? m.x, y: m.vy ?? m.y, d: m.d, a: m.a, dt: m.dt });
 
 // ================= Звуки раунду =================
@@ -235,7 +255,7 @@ function frame() {
     R: playing ? R : null, now, mySlot: S.mySlot, decor, insets: insets(), skin: S.room?.v ?? 0,
     slots: playing ? R.sl.map(s => ({
       x: s.vx ?? s.x, y: s.vy ?? s.y, dr: s.dr, mv: s.mv, a: s.a, dt: s.dt, c: s.c,
-      resist: s.o === S.mySlot || s.b ? s.rs > now : !!s.rsOn,
+      resist: s.o === S.mySlot || s.b ? s.rs > now : !!s.rsOn, emo: emoOf(s, pnow),
     })) : [],
     mons: playing ? R.mons.map(viewOfMon) : [],
   });

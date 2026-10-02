@@ -1,12 +1,13 @@
 // state.js — спільний стан клієнта (лоббі, раунд, імена, позиції інших) і дрібні утиліти.
 
 // Версія — кількість комітів у main разом із тим, що її змінює; видно в лоббі (чи оновились GitHub Pages)
-export const VERSION = 20;
+export const VERSION = 21;
 
 // Палітра гравців (8 — щоб у лоббі кольори не повторювались); боти беруть вільні
 export const COLORS = ['#f4f4f4', '#3b3b46', '#e53935', '#1e88e5', '#fdd835', '#ec407a', '#26c6da', '#fb8c00'];
 export const MODE_NAMES = ['Один проти одного', 'Команда'];
 export const DIFF_NAMES = ['Легко', 'Нормально', 'Важко'];
+export const EMOJI = ['👋', '😂', '😡', '😱', '👍'];   // реакції: клавіші 1–5
 export const ID_RE = /^[A-Za-z0-9]{8,32}$/;
 export const cleanName = (s) => String(s).replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim().slice(0, 16);
 export const q8 = (v) => Math.round(v * 256);              // координата → u16 (1/256 клітинки)
@@ -32,6 +33,7 @@ export const S = {
   room: null,
   names: new Map(),                  // id → ім'я (з hi)
   pos: new Map(),                    // id → остання поза з pos
+  emo: new Map(),                    // id → остання реакція { e (індекс EMOJI), at (performance.now) }
   gone: new Set(),                   // хто вийшов (onPeerGone) — запам'ятовує кожен, щоб прибрав і майбутній хост
   R: null,                           // поточний раунд (round.js); null — лоббі
   mySlot: -1,                        // мій слот у раунді; -1 — глядач

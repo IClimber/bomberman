@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  newRound, hostStep, outcome, checkEnd, kill, applyItem, deadlyAt,
+  newRound, hostStep, outcome, checkEnd, kill, applyItem, deadlyAt, killerAt, KB_WALL, KB_MON, KB_NONE,
   MODE_VS, MODE_COOP, RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, END_GRACE_MS,
 } from '../js/round.js';
 import {
@@ -75,6 +75,23 @@ test('бонуси і смертельні клітинки', () => {
   assert.ok(!deadlyAt(R, 1, 4, 2500, 0));
   const mon = [{ a: true, x: 5, y: 5.5 }];
   assert.ok(deadlyAt(R, 5, 5, 2500, 9999, mon));        // монстр убиває й зі стійкістю
+});
+
+test('хто вбив: вогонь — власник бомби (ланцюжок — бомба, що дала вогонь), стіна, монстр', () => {
+  const R = newRound({ r: 1, seed: 5, m: MODE_VS, s: 0, d: 1, t0: 0, sl: people(2, 1) });
+  const B = R.board;
+  B.addBomb({ o: 1, n: 1, x: 1, y: 1, t: 0, p: 2 });
+  B.addBomb({ o: 2, n: 1, x: 2, y: 1, t: 1000, p: 1 });       // підірве ланцюжком, її вогонь — на (3, 1)
+  B.advance(2500);
+  assert.equal(killerAt(R, 1, 2, 2500, 0), 1);
+  assert.equal(killerAt(R, 3, 1, 2500, 0), 2);
+  assert.equal(killerAt(R, 1, 4, 2500, 0), -1);
+  assert.equal(killerAt(R, 1, 2, 2500, 9999), -1);              // стійкість
+  assert.equal(killerAt(R, 5, 5, 2500, 0, [{ a: true, k: 1, x: 5, y: 5.4 }]), KB_MON + 1);
+  B.advance(B.sdAt + 1);
+  assert.equal(killerAt(R, 1, 1, B.sdAt + 1, 0), KB_WALL);
+  assert.ok(kill(R, 0, 2500, 1) && R.sl[0].kb === 1);
+  assert.equal(R.sl[1].kb, KB_NONE);
 });
 
 test('крок хоста: боти ставлять бомби, руйнують блоки; монстри рухаються; раунд закінчується', () => {

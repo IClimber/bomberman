@@ -139,6 +139,19 @@
   .toast.bad { border-color: var(--bad); color: #ffd6d3; }
   .toast.out { opacity: 0; }
   .endlist { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .endlist small { color: var(--muted); font-weight: 400; font-size: 13px; }
+  /* Стрічка подій: хто кого вбив, реакції тих, кого не видно на полі */
+  #feed {
+    position: fixed; top: 64px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+    pointer-events: none; z-index: 4; max-width: calc(100vw - 24px);
+  }
+  #feed .line {
+    display: flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 8px; white-space: nowrap;
+    background: #1f2433d9; border: 1px solid var(--line); font-size: 13px; transition: opacity 0.4s;
+  }
+  #feed .line b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; max-width: 9em; }
+  #feed .line.out { opacity: 0; }
+  .touch #feed .line { font-size: 11px; padding: 3px 8px; }
 
   /* ---------- Сенсорне керування (як у tck): стрілки з «пальцем» ліворуч, бомба праворуч ---------- */
   :root { --pad: 150px; --btn: 96px; }
@@ -172,6 +185,20 @@
     touch-action: none;
   }
   .bombBtn.pressed { transform: scale(0.93); }
+  .emoBtn {                             /* реакції: над кнопкою бомби, тап — рядок емодзі */
+    position: fixed;
+    right: calc(14px + (var(--btn) - 48px) / 2 + env(safe-area-inset-right));
+    bottom: calc(24px + var(--btn) + 14px + env(safe-area-inset-bottom));
+    width: 48px; height: 48px; min-height: 0; padding: 0; border-radius: 50%;
+    background: #1f2433cc; border: 2px solid #ffffff66; font-size: 24px; line-height: 1; touch-action: none;
+  }
+  .emoBar {
+    position: fixed; display: none; gap: 6px; padding: 6px; border-radius: 30px; background: #1f2433ee; border: 1px solid var(--line);
+    right: calc(14px + (var(--btn) - 48px) / 2 + 56px + env(safe-area-inset-right));
+    bottom: calc(24px + var(--btn) + 14px + env(safe-area-inset-bottom));
+  }
+  .emoBar.show { display: flex; }
+  .emoBar button { width: 40px; height: 40px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; font-size: 24px; touch-action: none; }
   .touch .hud { min-height: 0; flex-wrap: wrap; gap: 6px; padding: 6px 104px 6px 8px; }
   .touch .chips { gap: 4px; }
   .touch .chip { font-size: 11px; padding: 0 8px; gap: 4px; height: 25px; }
@@ -204,8 +231,11 @@
     <div class="knob" id="knob"></div>
   </div>
   <button class="bombBtn" id="bombBtn" tabindex="-1" aria-label="Бомба">💣</button>
+  <button class="emoBtn" id="emoBtn" tabindex="-1" aria-label="Реакції">🙂</button>
+  <div class="emoBar" id="emoBar"></div>
 </div>
 <div id="toasts" aria-live="polite"></div>
+<div id="feed" aria-live="polite"></div>
 
 <div class="overlay show" id="wait">
   <div class="card">
@@ -243,7 +273,7 @@
     <details>
       <summary>Як грати</summary>
       <ul>
-        <li>WASD або стрілки — рух, пробіл — бомба. F — на весь екран, M — звук.</li>
+        <li>WASD або стрілки — рух, пробіл — бомба. F — на весь екран, M — звук. 1–5 — реакції <span id="helpEmo"></span>.</li>
         <li>На телефоні: стрілки ліворуч (веди пальцем), кнопка <span id="helpBomb">💣</span> праворуч.</li>
         <li>Бомба вибухає через 2,5 с хрестом. Вогонь зупиняють стовпи й блоки; блоки руйнуються, під деякими — бонуси.</li>
         <li>Вибух убиває всіх, і тебе теж. Бомба підриває сусідні бомби.</li>

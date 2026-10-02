@@ -1,7 +1,7 @@
 // round.js — раунд без DOM і мережі: слоти, поле, монстри; крок хоста (боти, монстри, смерті, кінець раунду).
 // Слот { o (номер 0–3, місце старту), i (id людини; '' — бот), b (бот), c (колір), n (ім'я), a (живий), dt (коли загинув),
-//   x, y, dr (напрям), mv (іде), nb (бомб), fp (дальність вогню), sp (бонусів швидкості), ps (прохід крізь бомби),
-//   rs (стійкий до вогню до, спільний час), bn (лічильник своїх бомб) }
+//   kb (хто вбив, див. KB_*), x, y, dr (напрям), mv (іде), nb (бомб), fp (дальність вогню), sp (бонусів швидкості),
+//   ps (прохід крізь бомби), rs (стійкий до вогню до, спільний час), bn (лічильник своїх бомб) }
 import {
   makeMap, Board, MON, WALL, RESIST_MS, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS,
   IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, DX, DY, cellOf,
@@ -17,6 +17,9 @@ export const MODE_VS = 0, MODE_COOP = 1;
 // Підсумок: 1 — переміг слот wn, 2 — нічия (загинули всі), 3 — без переможця (люди загинули, боти живі),
 // 4 — перемога команди, 5 — поразка команди
 export const RES_WIN = 1, RES_DRAW = 2, RES_NOBODY = 3, RES_TEAM_WIN = 4, RES_TEAM_LOSS = 5;
+// Хто вбив (kb слоту чи монстра): 0–3 — вогонь бомби цього слоту (свій — сам себе), KB_WALL — стіна раптової смерті,
+// KB_MON + вид — монстр, KB_LEFT — вийшов з гри, KB_NONE — невідомо
+export const KB_WALL = 10, KB_MON = 20, KB_LEFT = 30, KB_NONE = 255;
 
 // sl: [{ i, b, c, n }] у порядку слотів
 export function newRound({ r, seed, m, s, d, t0, sl }) {
@@ -26,11 +29,11 @@ export function newRound({ r, seed, m, s, d, t0, sl }) {
   const slots = sl.map((e, k) => {
     const [x, y] = map.spawns[k];
     return {
-      o: k, i: e.i, b: !!e.b, c: e.c, n: e.n, a: true, dt: 0, x, y, dr: 3, mv: false,
+      o: k, i: e.i, b: !!e.b, c: e.c, n: e.n, a: true, dt: 0, kb: KB_NONE, x, y, dr: 3, mv: false,
       nb: START_BOMBS, fp: START_FIRE, sp: 0, ps: false, rs: 0, bn: 0,
     };
   });
-  const mons = map.mons.map(mo => ({ i: mo.i, k: mo.k, x: mo.x, y: mo.y, d: 0, a: true, dt: 0 }));
+  const mons = map.mons.map(mo => ({ i: mo.i, k: mo.k, x: mo.x, y: mo.y, d: 0, a: true, dt: 0, kb: KB_NONE }));
   return { r, seed, m, s, d, t0, coop, map, board, sl: slots, mons, p: 0, res: 0, wn: 255, endAt: 0 };
 }
 
@@ -42,24 +45,27 @@ export function applyItem(s, kind, now) {
   else if (kind === IT_RESIST) s.rs = now + RESIST_MS;
 }
 
-// Чи загинув би хтось у точці (x, y): стіна, вогонь (без стійкості), дотик монстра (mons — як їх видно)
-export function deadlyAt(R, x, y, now, resistUntil, mons = R.mons) {
+// Що вбило б того, хто в точці (x, y): стіна, вогонь (без стійкості), дотик монстра (mons — як їх видно).
+// Повертає kb (див. KB_*) або -1 — живий
+export function killerAt(R, x, y, now, resistUntil, mons = R.mons) {
   const B = R.board, i = cellOf(B.map, x, y);
-  if (B.cell[i] === WALL) return true;
-  if (B.fireAt(i, now) && !(resistUntil > now)) return true;
-  for (const m of mons) if (m.a && Math.hypot(m.x - x, m.y - y) < TOUCH) return true;
-  return false;
+  if (B.cell[i] === WALL) return KB_WALL;
+  if (B.fireAt(i, now) && !(resistUntil > now)) { const o = B.fireBy(i, now); return o >= 0 ? o : KB_NONE; }
+  for (const m of mons) if (m.a && Math.hypot(m.x - x, m.y - y) < TOUCH) return KB_MON + (m.k || 0);
+  return -1;
 }
+export const deadlyAt = (...a) => killerAt(...a) >= 0;
 
-export function kill(R, o, t) {
+export function kill(R, o, t, kb = KB_NONE) {
   const s = R.sl[o];
   if (!s || !s.a) return false;
   s.a = false;
   s.dt = t;
+  s.kb = kb;
   return true;
 }
 
-// Крок хоста. ev: { bomb(b), pick(p), dead(o, t), monster(m) } — що розіслати. Повертає true, якщо щось змінилось.
+// Крок хоста. ev: { bomb(b), pick(p), dead(o, t, kb), monster(m) } — що розіслати. Повертає true, якщо щось змінилось.
 // Раунд скінчився, а живих людей немає (усі загинули, боти лишились) — боти й монстри грають далі, поки висить підсумок
 // (він уже не змінюється); інакше після кінця все стоїть.
 export function hostStep(R, now, dt, ev) {
@@ -75,7 +81,12 @@ export function hostStep(R, now, dt, ev) {
     if (!m.a) continue;
     monsterStep(m, dt, B, targets, mctx);
     const i = cellOf(B.map, m.x, m.y);
-    if (B.cell[i] === WALL || B.fireAt(i, now)) { m.a = false; m.dt = now; changed = true; if (ev.monster) ev.monster(m); }
+    if (B.cell[i] === WALL || B.fireAt(i, now)) {
+      const o = B.fireBy(i, now);
+      m.a = false; m.dt = now; m.kb = B.cell[i] === WALL ? KB_WALL : o >= 0 ? o : KB_NONE;
+      changed = true;
+      if (ev.monster) ev.monster(m);
+    }
   }
   const threat = R.coop && R.d === 0 ? threatMap(R) : null;
   const reach = R.coop && R.d > 0 ? monsterReach(R, now) : null;
@@ -105,7 +116,8 @@ export function hostStep(R, now, dt, ev) {
       ev.pick(p);
       changed = true;
     }
-    if (deadlyAt(R, s.x, s.y, now, s.rs) && kill(R, s.o, now)) { ev.dead(s.o, now); changed = true; }
+    const kb = killerAt(R, s.x, s.y, now, s.rs);
+    if (kb >= 0 && kill(R, s.o, now, kb)) { ev.dead(s.o, now, kb); changed = true; }
   }
   return checkEnd(R, now) || changed;
 }
