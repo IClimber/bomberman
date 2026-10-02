@@ -9,6 +9,11 @@ import { MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS } from './sim.js';
 import { skinOf } from './skins/index.js';
 
 const $ = (id) => document.getElementById(id);
+// Запис у DOM — лише при зміні: HUD оновлюється щокадру, а будь-який запис робить розкладку недійсною,
+// і наступне читання (hudBottom у main.js) змушувало браузер перераховувати її синхронно, 60 разів на секунду
+const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; };
+const setProp = (el, k, v) => { if (el[k] !== v) el[k] = v; };
+let feedTop = '';
 
 export function toast(text, bad = false, ms = 2600) {
   const el = document.createElement('div');
@@ -94,7 +99,8 @@ let chipsKey = '';
 export function renderHud(now) {
   const R = S.R, playing = !!R && !!S.room && S.room.g === R.r;
   $('hud').classList.toggle('show', playing);
-  $('feed').style.top = `${(playing ? hudBottom() : 56) + 8}px`;
+  const top = `${(playing ? hudBottom() : 56) + 8}px`;
+  if (top !== feedTop) { feedTop = top; $('feed').style.top = top; }
   if (!playing) {
     $('banner').classList.remove('show');
     $('result').classList.remove('show');
@@ -102,11 +108,11 @@ export function renderHud(now) {
     return;
   }
   const em = skinOf().emoji;
-  if ($('bombBtn').textContent !== em.bomb) $('bombBtn').textContent = em.bomb;
-  if ($('detBtn').textContent !== em.remote) $('detBtn').textContent = em.remote;
+  setText($('bombBtn'), em.bomb);
+  setText($('detBtn'), em.remote);
   const items = R.sl.map((s, k) => {
     const me = k === S.mySlot;
-    const stats = s.a ? statsText(em, s.nb, s.fp, s.sp, s.ps, me || s.b ? s.rs > now : s.rsOn, s.rc) : '💀';
+    const stats = s.a ? statsText(em, s.nb, s.fp, s.sp, s.ps, s.rs > now, s.rc) : '💀';
     return [s.c, `${s.n}${me ? ' (ти)' : ''}`, stats, s.a, me];
   });
   const timer = $('timer');
@@ -127,12 +133,12 @@ export function renderHud(now) {
   }
   const sd = R.board.sdAt, left = now < R.t0 ? sd - R.t0 : sd - now;
   timer.classList.toggle('sd', left <= 0);
-  timer.textContent = left > 0 ? fmt(left) : SD_TEXT;
+  setText(timer, left > 0 ? fmt(left) : SD_TEXT);
 
   const me = R.sl[S.mySlot];
   const banner = S.mySlot < 0 ? 'Раунд уже йде — ти дивишся. Зіграєш у наступному.'
     : !me.a && R.p === 0 ? 'Для тебе раунд скінчився — дивишся до кінця.' : '';
-  $('banner').textContent = banner;
+  setText($('banner'), banner);
   $('banner').classList.toggle('show', !!banner);
 
   const ended = R.p === 1;
@@ -144,11 +150,11 @@ let resKey = '';
 function renderResult(R) {
   const mine = !!S.room?.pp.find(p => p.i === net.id)?.r, { need, ready, members } = startNeed();
   const play = $('playBtn');
-  play.textContent = mine ? `Граю ✓ · ${ready} / ${need}` : need > 1 ? `Грати · ${ready} / ${need}` : 'Грати';
+  setText(play, mine ? `Граю ✓ · ${ready} / ${need}` : need > 1 ? `Грати · ${ready} / ${need}` : 'Грати');
   play.classList.toggle('on', mine);
-  play.title = mine ? 'Натисни ще раз, щоб скасувати' : '';
+  setProp(play, 'title', mine ? 'Натисни ще раз, щоб скасувати' : '');
   const who = need >= members ? 'щойно всі натиснуть «Грати»' : `щойно «Грати» натиснуть ${need}`;
-  $('resNote').textContent = `Наступний раунд — ${who}.`;
+  setText($('resNote'), `Наступний раунд — ${who}.`);
   const kills = (o) => R.sl.filter(e => e.o !== o && e.kb === o).length, mons = (o) => R.mons.filter(m => !m.a && m.kb === o).length;
   const key = `${R.r}:${R.res}:${R.wn}:${R.sl.map(s => `${+s.a}${s.kb}${kills(s.o)}${mons(s.o)}`).join(',')}`;   // боти можуть грати й після кінця
   if (key === resKey) return;

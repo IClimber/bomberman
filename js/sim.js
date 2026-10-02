@@ -221,8 +221,11 @@ export class Board {
     this.picks = new Map();          // усі підбори: ключ → { o, x, y, t }
     this.dets = new Map();           // усі підриви детонатором: ключ → { o, n, b, t }
     this.base = { cell: map.cell, item: map.item, shown: new Uint8Array(map.cell.length), T: -Infinity, active: [] };
-    this.onBlast = null;             // (bomb) — вибух при «живій» обробці (не при перерахунку), для звуку
-    this.blasted = new Set();        // ключі бомб, що вже вибухали «наживо»
+    // (bomb) — вибух, для звуку: один раз на бомбу (blasted), зокрема при перерахунку — пізня подія (чужий підрив детонатором
+    // приходить завжди по факту) звучить, коли про неї дізнались; давно вибухлі (addBomb з quiet) — без звуку
+    this.onBlast = null;
+    this.blasted = new Set();        // ключі бомб, що вже вибухали
+    this.live = true;                // false — лише в копії для danger: там вибухи уявні
     this.reset();
   }
 
@@ -237,8 +240,16 @@ export class Board {
       shown[i] = (bytes[i] >> 5) & 1;
       if (this.map.cell[i] === PILLAR) cell[i] = PILLAR;
     }
+    // вогню й блоків, що горять, у знімку немає (блок, що горить, — уже порожньо): що в нас горіло до T, лишаємо
+    // (спершу доходимо до T, якщо ще не дійшли), інакше в глядача (знімок ~10 разів на секунду) вибух гас за ≤ 100 мс,
+    // а бонус з'являвся одразу
+    if (T > this.T) this.advance(T);
     for (const b of active) if (!this.bombs.has(bombKey(b))) this.bombs.set(bombKey(b), bombRec(b));
-    this.base = { cell, item, shown, T, active: active.map(b => this.bombs.get(bombKey(b))) };
+    const flames = this.flames.filter(f => f.t0 <= T && f.t1 > T), burn = new Map();
+    for (const [i, until] of this.burn) {
+      if (until > T && cell[i] === EMPTY && this.cell[i] === BLOCK) { cell[i] = BLOCK; shown[i] = 0; burn.set(i, until); }
+    }
+    this.base = { cell, item, shown, T, active: active.map(b => this.bombs.get(bombKey(b))), flames, burn };
     this.reset();
     return true;
   }
@@ -249,13 +260,13 @@ export class Board {
     this.item = Uint8Array.from(b.item);
     this.shown = Uint8Array.from(b.shown);
     this.fireUntil = new Float64Array(n);
-    this.burn = new Map();           // клітинка → коли догорить блок
+    this.burn = new Map(b.burn);     // клітинка → коли догорить блок
     this.active = new Map();         // клітинка → активна бомба (див. вище)
     // { cells: [[клітинка, вид, напрям]], t0, t1, o }; вид: 0 центр, 1 промінь, 2 кінець, 9 блок, 10 бомба, 11 бонус
-    this.flames = [];
+    this.flames = b.flames ? b.flames.slice() : [];
+    for (const f of this.flames) for (const [i] of f.cells) if (this.fireUntil[i] < f.t1) this.fireUntil[i] = f.t1;
     this.T = b.T;
     this.dirty = false;
-    this.live = false;
     const inBase = new Set();
     for (const bb of b.active) {
       const i = bb.y * this.map.GW + bb.x;
@@ -300,7 +311,6 @@ export class Board {
 
   advance(T) {
     if (this.dirty) this.reset();
-    this.live = true;
     this.run(T);
     if (T > this.T) this.T = T;
     this.flames = this.flames.filter(f => f.t1 > this.T);

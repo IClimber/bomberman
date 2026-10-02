@@ -34,7 +34,7 @@ const LAST_SPARE = 120;              // втеча без запасу spare: з
 const BACK = [0, 3, 4, 1, 2];
 
 // ctx: { board, now, diff, coop, enemies [{x, y}], allies [{x, y}], monsters [{x, y}], danger() → Float64Array,
-//   threat Uint8Array | null (клітинки біля монстрів, «Легко»), reach Float64Array | null (коли туди може дійти монстр) }
+//   reach Float64Array | null («Команда»: коли туди може дійти монстр) }
 // Повертає true, якщо бот хоче поставити бомбу тут і зараз (хост перевірить і поставить).
 export function botTick(bot, dt, ctx) {
   const L = LEVEL[ctx.diff] ?? LEVEL[1];
@@ -222,7 +222,7 @@ function pressure(ctx, i, GW) {
   return ctx.enemies.some(e => Math.abs(Math.round(e.x) - x) + Math.abs(Math.round(e.y) - y) <= 2) ? 1 : 0;
 }
 
-const monOf = (ctx, L) => ({ threat: ctx.threat, reach: ctx.reach, cross: L.cross, hold: L.hold });
+const monOf = (ctx, L) => ({ reach: ctx.reach, cross: L.cross, hold: L.hold });
 
 // Нова бомба: чи можна йти далі за шляхом (так, як його пропустив би bfs) і стояти там, куди він веде
 function pathOk(bot, ai, ctx, L) {
@@ -240,8 +240,7 @@ function pathOk(bot, ai, ctx, L) {
 
 // Чи можна стояти в клітинці i з моменту t з огляду на монстрів
 function monOk(mon, i, t) {
-  if (mon.reach) return mon.reach[i] > t + mon.hold;
-  return !(mon.threat && mon.threat[i]);
+  return !mon.reach || mon.reach[i] > t + mon.hold;
 }
 
 // Затиснутий монстрами (жодної клітинки, куди встигнути): крок до сусідньої, куди монстр дійде найпізніше
@@ -332,12 +331,12 @@ function canEscape(bot, board, i, t, ms, danger, mon, spare, roomy) {
 // Чи можна зайти в клітинку j (з клітинки from), дійшовши до її центру в момент ta: вона прохідна, не горить, а перший вибух
 // у ній (danger / hypo) буде вже після того, як ми з неї вийдемо (або останній уже минув). Під чужою бомбою з детонатором
 // (danger.any) — лише зсередини її ж вогню, коли тікаємо: ззовні туди не заходимо. Крізь вогонь своєї (danger.mine) — можна.
-// Монстри (mon): «Легко» — не заходимо в клітинки поруч із ними; інакше — лише в ті, які встигнемо пройти раніше за них.
+// Монстри (mon) — лише в клітинки, які встигнемо пройти раніше за них.
 function canEnter(bot, board, j, ta, ms, danger, hypo, mon, spare, from) {
   const GW = board.map.GW, x = j % GW;
   if (board.solid(x, (j - x) / GW, false, bot.ps)) return false;
   if (danger.any && danger.any[j] && !danger.any[from]) return false;
-  if (mon && (mon.reach ? !(mon.reach[j] > ta + ms * 0.5 + mon.cross) : mon.threat && mon.threat[j])) return false;
+  if (mon && mon.reach && !(mon.reach[j] > ta + ms * 0.5 + mon.cross)) return false;
   let dj = danger[j], dl = danger.last[j];                        // перший і останній вибух у клітинці
   if (hypo && hypo.has(j)) { const h = hypo.get(j); dj = Math.min(dj, h); dl = Math.max(dl, h); }
   if (board.fireAt(j) && !(ta > board.fireUntil[j] + 100 && ta > board.T + FLAME_MS + 150)) return false;   // догорить до нас

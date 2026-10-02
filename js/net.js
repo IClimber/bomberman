@@ -3,7 +3,7 @@
 // Стан кімнати й раунду авторитетний у хоста (див. host.js); рух, бомби, смерть і підбір — у власника.
 import { createNet } from 'https://iclimber.github.io/p2p-net/v1/net.js';
 import { S, ID_RE, COLORS, EMOJI, cleanName, uq8 } from './state.js';
-import { SIZES, FUSE_MS, bombKey, pickKey, detKey } from './sim.js';
+import { SIZES, FUSE_MS, bombKey, pickKey, detKey, hashStr } from './sim.js';
 import { SKINS } from './skins/index.js';
 import { newRound, kill, MODE_VS, KB_NONE } from './round.js';
 import * as host from './host.js';
@@ -29,10 +29,10 @@ export const net = createNet({
   url: SIGNAL_URL, game: 'bomberman', room: S.roomId,
   messages: {
     hi: { broadcast: true, schema: { n: 'str' } },                   // ім'я
-    // стан кімнати від хоста: налаштування, люди лоббі, таблиця перемог, раунд, що йде
+    // стан кімнати від хоста: налаштування, люди лоббі, таблиця перемог, раунд, що йде, раунд, за який уже зараховано результат
     lobby: {
       broadcast: true, schema: {
-        m: 'u8', s: 'u8', d: 'u8', b: 'bool', v: 'u8', g: 'f64',
+        m: 'u8', s: 'u8', d: 'u8', b: 'bool', v: 'u8', g: 'f64', e: 'f64',
         pp: [{ i: 'str', c: 'u8', r: 'bool', rt: 'f64' }],
         w: [{ n: 'str', a: 'u16', c: 'u16' }],
       },
@@ -56,7 +56,7 @@ export const net = createNet({
     sync: { schema: { r: 'f64' } },                                   // → хост: надішли всі події раунду
     evs: { schema: { r: 'f64', bo: [BOMB], pk: [{ o: 'u8', x: 'u8', y: 'u8', t: 'f64' }], dt: [DET], dd: [{ o: 'u8', t: 'f64', k: 'u8' }] } },
     // власна поза кожного учасника раунду (~20 Гц): координати, напрям, рух, бонуси
-    pos: { broadcast: true, unreliable: true, schema: { r: 'f64', x: 'u16', y: 'u16', dr: 'u8', mv: 'bool', nb: 'u8', fp: 'u8', sp: 'u8', ps: 'bool', rs: 'bool', rc: 'bool' } },
+    pos: { broadcast: true, unreliable: true, schema: { r: 'f64', x: 'u16', y: 'u16', dr: 'u8', mv: 'bool', nb: 'u8', fp: 'u8', sp: 'u8', ps: 'bool', rs: 'f64', rc: 'bool' } },
     bomb: { broadcast: true, schema: { r: 'f64', ...BOMB } },          // поставив власник (бота — хост)
     dead: { broadcast: true, schema: { r: 'f64', o: 'u8', t: 'f64', k: 'u8' } },   // загинув (вирішує сам; бота — хост); k — хто вбив (KB_*)
     pick: { broadcast: true, schema: { r: 'f64', o: 'u8', x: 'u8', y: 'u8', t: 'f64' } },   // підібрав бонус
@@ -111,13 +111,7 @@ function parseWorld(d) {
   for (const b of d.bo) if (b.p < 1 || b.p > 16) return null;
   return d;
 }
-const seedOf = (r) => hashRoom(S.roomId + ':' + r);
-function hashRoom(str) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return h >>> 0;
-}
-export { seedOf };
+export const seedOf = (r) => hashStr(S.roomId + ':' + r);
 
 // Подія раунду від гравця: свій слот — лише від нього самого, слот бота — від будь-кого (його шле хост;
 // розбіжності після зміни хоста вирівнює звіряння подій, див. checkSync)
@@ -162,7 +156,7 @@ const ON = {
     const s = R.sl.find(e => !e.b && e.i === id);
     if (!s || !s.a) return;
     s.x = p.x; s.y = p.y; s.dr = d.dr; s.mv = d.mv;
-    s.nb = d.nb; s.fp = d.fp; s.sp = d.sp; s.ps = d.ps; s.rsOn = d.rs; s.rc = d.rc;
+    s.nb = d.nb; s.fp = d.fp; s.sp = d.sp; s.ps = d.ps; s.rs = d.rs; s.rc = d.rc;
   },
   bomb(d, id) {
     const R = S.R;
@@ -215,22 +209,24 @@ const ON = {
 };
 
 // Стан раунду від хоста. Новий раунд — будуємо карту від зерна; глядач бере поле зі знімка.
+// Хто загинув до того (зайшли посеред раунду), — тихо: без звуків, стрічки подій і анімації смерті
 function applyWorld(w) {
   let R = S.R;
-  if (!R || R.r !== w.r) {
+  const fresh = !R || R.r !== w.r;
+  if (fresh) {
     R = newRound({ r: w.r, seed: seedOf(w.r), m: w.m, s: w.s, d: w.d, t0: w.t0, sl: w.sl.map(e => ({ i: e.i, b: e.b, c: e.c, n: e.n })) });
-    if (R.mons.length !== w.mo.length) R.mons = w.mo.map(m => ({ i: m.i, k: m.k, x: uq8(m.x), y: uq8(m.y), d: m.dr, a: m.a, dt: 0 }));
+    if (R.mons.length !== w.mo.length) R.mons = w.mo.map(m => ({ i: m.i, k: m.k, x: uq8(m.x), y: uq8(m.y), d: m.dr, a: true, dt: 0 }));
     S.R = R;
     S.mySlot = R.sl.findIndex(s => !s.b && s.i === net.id);
     hooks.round();
   }
-  const now = net.sharedNow();
+  const now = net.sharedNow(), past = fresh ? R.t0 : now;          // коли загинули ті, про кого дізнались лише зараз
   R.worldAt = performance.now();
   R.p = w.p; R.res = w.k; R.wn = w.wn;
   w.sl.forEach((e, k) => {
     const s = R.sl[k];
     if (!s) return;
-    if (!e.a && s.a && kill(R, k, now, e.kb)) hooks.death(k);
+    if (!e.a && s.a && kill(R, k, past, e.kb) && !fresh) hooks.death(k);
     if (!e.a && !s.a && s.kb === KB_NONE) s.kb = e.kb;               // хто вбив — dead міг загубитися
     // бот живий у хоста (ми, відрізані, «убили» його самі); людина — якщо ми «прибрали» її, коли були хостом лише для себе
     if ((s.b || s.pruned) && e.a && !s.a) { s.a = true; s.dt = 0; s.kb = KB_NONE; s.pruned = false; }
@@ -241,7 +237,7 @@ function applyWorld(w) {
   for (const e of w.mo) {
     const m = R.mons.find(x => x.i === e.i);
     if (!m) continue;
-    if (!e.a && m.a) { m.a = false; m.dt = now; }
+    if (!e.a && m.a) { m.a = false; m.dt = past; m.popped = fresh; }
     if (!e.a) m.kb = e.kb;
     if (e.a && !m.a) { m.a = true; m.dt = 0; m.popped = false; }   // так само з монстрами
     if (!m.a) continue;
@@ -263,7 +259,8 @@ function checkSync(R, w) {
   if (cut <= R.t0) return;
   const dg = R.board.digest(cut);
   if (dg.n === w.en && dg.h === w.eh) { R.syncMiss = 0; return; }
-  if (++R.syncMiss < 2 || t - (R.syncAsked || 0) < SYNC_EVERY) return;
+  R.syncMiss = (R.syncMiss || 0) + 1;
+  if (R.syncMiss < 2 || t - (R.syncAsked || 0) < SYNC_EVERY) return;
   R.syncAsked = t;
   net.send('sync', { r: R.r }, net.hostId());
 }

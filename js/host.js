@@ -13,7 +13,7 @@ const STALE_MS = 30000;              // кого стільки не чути, �
 
 export function createRoom() {
   if (S.room) return;
-  S.room = { m: 0, s: 0, d: 1, b: true, v: 0, g: 0, pp: [], w: [] };
+  S.room = { m: 0, s: 0, d: 1, b: true, v: 0, g: 0, e: 0, pp: [], w: [] };
   S.waiting = false;
   addMember(net.id);
   net.announce();                                                  // тепер у нас є гра
@@ -186,6 +186,7 @@ function tick() {
   const changed = hostStep(R, now, dt, EV);
   if (R.p === 1 && !R.scored) {                                   // кінець: таблиця, «Грати» — з чистого аркуша
     R.scored = true;
+    S.room.e = R.r;
     score(R);
     for (const p of S.room.pp) { p.r = false; p.rt = 0; }
     sendLobby();
@@ -198,7 +199,8 @@ function tick() {
 const quietSince = new Map();                                      // id → відколи не чути (performance.now)
 function prune(pnow) {
   const ids = new Set(S.room.pp.map(p => p.i));
-  if (S.R && S.room.g === S.R.r) for (const s of S.R.sl) if (!s.b && s.a) ids.add(s.i);
+  // живі учасники раунду — лише поки він іде: на підсумку memberGone слоту не чіпає (інакше викликався б щотіку)
+  if (S.R && S.room.g === S.R.r && S.R.p === 0) for (const s of S.R.sl) if (!s.b && s.a) ids.add(s.i);
   for (const id of ids) {
     if (id === net.id) continue;
     if (net.isLive(id) && !S.gone.has(id)) { quietSince.delete(id); continue; }
@@ -208,7 +210,8 @@ function prune(pnow) {
 }
 
 // Стали хостом: ботів і монстрів ведемо від останніх відомих позицій. «Відколи не чути» — з нуля: записи з минулого
-// разу, коли були хостом, застарілі (інакше короткий обрив через пів хвилини одразу «прибирав» гравця, якого не чути)
+// разу, коли були хостом, застарілі (інакше короткий обрив через пів хвилини одразу «прибирав» гравця, якого не чути).
+// Раунд уже зараховано (lobby.e — надійно; world з кінцем міг загубитися) — не зараховуємо вдруге.
 function becameHost(now) {
   quietSince.clear();
   const R = S.R;
@@ -216,6 +219,6 @@ function becameHost(now) {
   for (const s of R.sl) s.ai = null;
   for (const m of R.mons) { m.tx = null; m.ty = null; }
   R.endAt = 0;
-  if (R.p === 1) R.scored = true;
+  if (R.p === 1 || S.room.e === R.r) R.scored = true;
 }
 export function startHostLoop() { setInterval(tick, TICK_MS); }

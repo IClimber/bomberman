@@ -91,10 +91,10 @@ addEventListener('keydown', (e) => {
   if (d) {
     if (!held.includes(d)) held.push(d);
     if (S.R) e.preventDefault();
-  } else if (e.code === 'Space') {
-    if (S.R) { e.preventDefault(); if (!e.repeat) wantBomb = true; }
+  } else if (e.code === 'Space') {                                    // на підсумку пробіл і Enter — кнопкам («Грати»)
+    if (S.R?.p === 0) { e.preventDefault(); if (!e.repeat) wantBomb = true; }
   } else if (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'NumpadEnter') {
-    if (S.R) { e.preventDefault(); if (!e.repeat) wantDet = true; }
+    if (S.R?.p === 0) { e.preventDefault(); if (!e.repeat) wantDet = true; }
   } else if (KEY_EMO.test(e.code) && S.R && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
     const k = Number(KEY_EMO.exec(e.code)[1]) - 1;
     if (k < EMOJI.length && S.room?.g === S.R.r) act.emo(k);
@@ -164,21 +164,47 @@ function stepMe(R, now, dt) {
     sfx.pick();
     toast(ITEM_TEXT[it]);
   }
-  const kb = killerAt(R, s.x, s.y, now, s.rs, R.mons.map(viewOfMon));
-  if (kb >= 0 && kill(R, s.o, now, kb)) {
-    net.send('dead', { r: R.r, o: s.o, t: now, k: kb });
-    for (const e of orphanDets(R, s.o, now)) { B.addDet(e); net.send('det', { r: R.r, ...e }); }   // бомби з детонатором — за запал
-    sfx.death();
-    feedDeath(R, s.o);
-  }
+  checkMe(R, s, now, R.mons.map(viewOfMon));
 }
+// Чи не загинув свій гравець у момент now (mons — монстри, як їх видно)
+function checkMe(R, s, now, mons) {
+  const kb = killerAt(R, s.x, s.y, now, s.rs, mons);
+  if (kb < 0 || !kill(R, s.o, now, kb)) return;
+  net.send('dead', { r: R.r, o: s.o, t: now, k: kb });
+  for (const e of orphanDets(R, s.o, now)) { R.board.addDet(e); net.send('det', { r: R.r, ...e }); }   // бомби з детонатором — за запал
+  sfx.death();
+  feedDeath(R, s.o);
+}
+// Прихована вкладка: requestAnimationFrame стоїть, таймери — не частіше ніж раз на секунду, а вогонь горить FLAME_MS. Тож свою
+// смерть перевіряємо таймером по всьому пропущеному часу, кроками CATCH_MS (і в першому кадрі після повернення, і коли кадр
+// забарився): інакше гравець у фоні був безсмертний — вогонь і монстри минали, стіни раптової смерті чекали його повернення
+const CATCH_MS = 100;
+let meAt = 0;                                                          // до якого моменту (спільний час) себе перевірено
+function catchUp(R, now) {
+  const s = R.sl[S.mySlot];
+  if (s && s.a && R.p === 0) {
+    for (let t = Math.max(meAt, R.t0) + CATCH_MS; t < now && s.a; t += CATCH_MS) {
+      R.board.advance(t);
+      checkMe(R, s, t, R.mons);
+    }
+  }
+  meAt = now;
+}
+setInterval(() => {
+  const R = S.R, s = R && R.sl[S.mySlot];
+  if (!document.hidden || !s || !s.a || R.p !== 0 || S.room?.g !== R.r) return;
+  const now = net.sharedNow();
+  catchUp(R, now);
+  R.board.advance(now);
+  if (now >= R.t0) checkMe(R, s, now, R.mons);
+}, 250);
 
 // Розсилка своєї пози: зміни — одразу (до 20 Гц), інакше раз на секунду; ім'я — раз на 4 с
 let lastPos = '', lastPosT = 0;
 setInterval(() => {
   const R = S.R, s = R && R.sl[S.mySlot];
   if (!s || !s.a || !net.linkCount() || S.room?.g !== R.r) return;
-  const p = { r: R.r, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv, nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs > net.sharedNow(), rc: s.rc };
+  const p = { r: R.r, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv, nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs, rc: s.rc };
   const key = JSON.stringify(p), t = performance.now();
   if (key !== lastPos || t - lastPosT > 1000) {
     lastPos = key;
@@ -257,6 +283,7 @@ function frame() {
   const now = net.sharedNow(), R = S.R;
   const playing = !!R && !!S.room && S.room.g === R.r;
   if (playing) {
+    if (S.mySlot >= 0) catchUp(R, now);
     R.board.advance(now);
     if (S.mySlot >= 0) stepMe(R, now, dt);
     updateViews(R, dt);
@@ -265,12 +292,13 @@ function frame() {
   renderHud(now);
   const me = playing && R.sl[S.mySlot];
   $('controls').classList.toggle('show', !!me && me.a && R.p === 0);
-  $('detBtn').hidden = !(me && me.rc);
+  const noDet = !(me && me.rc);
+  if ($('detBtn').hidden !== noDet) $('detBtn').hidden = noDet;
   renderer.draw({
     R: playing ? R : null, now, mySlot: S.mySlot, decor, insets: insets(), skin: S.room?.v ?? 0,
     slots: playing ? R.sl.map(s => ({
       x: s.vx ?? s.x, y: s.vy ?? s.y, dr: s.dr, mv: s.mv, a: s.a, dt: s.dt, c: s.c,
-      resist: s.o === S.mySlot || s.b ? s.rs > now : !!s.rsOn, emo: emoOf(s, pnow),
+      resist: s.rs > now, emo: emoOf(s, pnow),
     })) : [],
     mons: playing ? R.mons.map(viewOfMon) : [],
   });

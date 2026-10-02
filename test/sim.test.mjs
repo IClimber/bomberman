@@ -187,6 +187,23 @@ test('знімок для глядача: поле з знімка й подал
   assert.deepEqual(late.snapshot(), host.snapshot());
 });
 
+test('знімок для глядача: вогонь і блок, що горить, тримаються FLAME_MS, хоч знімок ~10 разів на секунду', () => {
+  const m = emptyMap();
+  m.cell[at(m, 4, 1)] = BLOCK;
+  const host = new Board(m, 0), spec = new Board(m, 0);
+  for (const bd of [host, spec]) bd.addBomb({ o: 0, n: 1, x: 2, y: 1, t: 0, p: 2 });
+  for (let t = 100; t <= FUSE_MS + FLAME_MS + 200; t += 100) {
+    host.advance(t);
+    spec.advance(t - 20);                                       // кадри глядача ще не дійшли до часу знімка
+    spec.setBase(host.snapshot(), host.activeList(), host.T);
+    spec.advance(t + 50);
+    const T = t + 50, hostFire = t + 50 >= FUSE_MS && t + 50 < FUSE_MS + FLAME_MS;
+    assert.equal(spec.fireAt(at(m, 3, 1), T), hostFire, `вогонь о ${T}`);
+    assert.equal(spec.burn.has(at(m, 4, 1)), hostFire, `блок горить о ${T}`);
+    assert.equal(spec.cell[at(m, 4, 1)], t + 50 < FUSE_MS + FLAME_MS ? BLOCK : EMPTY, `блок о ${T}`);
+  }
+});
+
 test('небезпека: клітинки під вибухом і ланцюжком, решта безпечні', () => {
   const m = emptyMap();
   const b = new Board(m, 0);
