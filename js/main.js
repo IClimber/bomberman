@@ -232,7 +232,7 @@ function frame() {
   const me = playing && R.sl[S.mySlot];
   $('controls').classList.toggle('show', !!me && me.a && R.p === 0);
   renderer.draw({
-    R: playing ? R : null, now, mySlot: S.mySlot, decor, insets: insets(),
+    R: playing ? R : null, now, mySlot: S.mySlot, decor, insets: insets(), skin: S.room?.v ?? 0,
     slots: playing ? R.sl.map(s => ({
       x: s.vx ?? s.x, y: s.vy ?? s.y, dr: s.dr, mv: s.mv, a: s.a, dt: s.dt, c: s.c,
       resist: s.o === S.mySlot || s.b ? s.rs > now : !!s.rsOn,

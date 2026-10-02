@@ -4,6 +4,7 @@
 import { createNet } from 'https://iclimber.github.io/p2p-net/v1/net.js';
 import { S, ID_RE, COLORS, cleanName, uq8 } from './state.js';
 import { SIZES, FUSE_MS, bombKey, pickKey } from './sim.js';
+import { SKINS } from './skins/index.js';
 import { newRound, kill, MODE_VS } from './round.js';
 import * as host from './host.js';
 
@@ -29,12 +30,12 @@ export const net = createNet({
     // стан кімнати від хоста: налаштування, люди лоббі, таблиця перемог, раунд, що йде
     lobby: {
       broadcast: true, schema: {
-        m: 'u8', s: 'u8', d: 'u8', b: 'bool', g: 'f64',
+        m: 'u8', s: 'u8', d: 'u8', b: 'bool', v: 'u8', g: 'f64',
         pp: [{ i: 'str', c: 'u8', r: 'bool', rt: 'f64' }],
         w: [{ n: 'str', a: 'u16', c: 'u16' }],
       },
     },
-    cfg: { schema: { m: 'u8', s: 'u8', d: 'u8', b: 'bool' } },        // → хост: змінити налаштування
+    cfg: { schema: { m: 'u8', s: 'u8', d: 'u8', b: 'bool', v: 'u8' } },   // → хост: змінити налаштування
     ready: { schema: { r: 'bool', t: 'f64' } },                       // → хост: «Старт» / «Грати» натиснуто (чи скасовано) і коли
     back: { schema: {} },                                             // → хост: після раунду — усіх у лоббі
     // стан раунду від хоста (~10 Гц і одразу при змінах, повний): підсумок, слоти (боти — з позиціями),
@@ -90,7 +91,7 @@ export const net = createNet({
 
 // ---------- Перевірка вхідних даних (типи вже перевірено за схемою) ----------
 function parseLobby(d) {
-  if (d.m > 1 || d.s >= SIZES.length || d.d > 2 || d.pp.length > 64 || d.w.length > 256) return null;
+  if (d.m > 1 || d.s >= SIZES.length || d.d > 2 || d.v >= SKINS.length || d.pp.length > 64 || d.w.length > 256) return null;
   for (const p of d.pp) if (!ID_RE.test(p.i) || p.c >= COLORS.length) return null;
   for (const w of d.w) w.n = cleanName(w.n);
   return d;
@@ -252,7 +253,7 @@ export const act = {
   cfg(c) {                                                         // c — лише змінені поля
     if (!S.room || S.room.g) return;
     Object.assign(S.room, c);
-    const full = { m: S.room.m, s: S.room.s, d: S.room.d, b: S.room.b };
+    const full = { m: S.room.m, s: S.room.s, d: S.room.d, b: S.room.b, v: S.room.v };
     if (net.isHost()) host.setCfg(full);
     else net.send('cfg', full, net.hostId());
     hooks.room();

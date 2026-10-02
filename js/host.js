@@ -4,6 +4,7 @@
 import { net, hooks, lobbyMembers, nameOf, seedOf, resultShown, SYNC_LAG } from './net.js';
 import { S, COLORS, q8 } from './state.js';
 import { SIZES, mulberry32 } from './sim.js';
+import { SKINS } from './skins/index.js';
 import { newRound, hostStep, COUNTDOWN_MS, MODE_VS, RES_WIN, RES_TEAM_WIN } from './round.js';
 
 export const WORLD_EVERY = 100;      // хост розсилає стан раунду раз на стільки мс (і одразу при змінах)
@@ -12,7 +13,7 @@ const STALE_MS = 30000;              // кого стільки не чути, �
 
 export function createRoom() {
   if (S.room) return;
-  S.room = { m: 0, s: 0, d: 1, b: true, g: 0, pp: [], w: [] };
+  S.room = { m: 0, s: 0, d: 1, b: true, v: 0, g: 0, pp: [], w: [] };
   S.waiting = false;
   addMember(net.id);
   net.announce();                                                  // тепер у нас є гра
@@ -47,6 +48,7 @@ export function setCfg(d) {
   if (d.m <= 1) S.room.m = d.m;
   if (d.s < SIZES.length) S.room.s = d.s;
   if (d.d <= 2) S.room.d = d.d;
+  if (d.v < SKINS.length) S.room.v = d.v;
   S.room.b = !!d.b;
   sendLobby();
   hooks.room();

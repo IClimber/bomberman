@@ -1,8 +1,9 @@
-// lobby.js — екран підключення і лоббі: нік, люди кімнати, налаштування, «Я готовий», «Старт», таблиця перемог.
+// lobby.js — екран підключення і лоббі: нік, люди кімнати, налаштування (зокрема стиль графіки), «Старт», таблиця перемог.
 import { S, COLORS, MODE_NAMES, DIFF_NAMES, VERSION, cleanName, saveName } from './state.js';
 import { net, act, lobbyMembers, startNeed, botsForced, nameOf } from './net.js';
 import { createRoom } from './host.js';
 import { SIZES } from './sim.js';
+import { SKINS, skinOf } from './skins/index.js';
 import { sfx } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
@@ -49,6 +50,13 @@ export function initLobby(status) {
     return o;
   }));
   $('size').onchange = (e) => act.cfg({ s: Number(e.target.value) });
+  $('look').replaceChildren(...SKINS.map((sk, k) => {
+    const o = document.createElement('option');
+    o.value = String(k);
+    o.textContent = sk.name;
+    return o;
+  }));
+  $('look').onchange = (e) => act.cfg({ v: Number(e.target.value) });
   $('bots').onchange = (e) => act.cfg({ b: e.target.checked });
   $('startBtn').onclick = () => { sfx.click(); act.ready(!myEntry()?.r); };   // «Старт» — я готовий; ще раз — скасувати
   const copy = $('copyBtn');
@@ -90,6 +98,10 @@ export function renderLobby() {
   [...$('modeSeg').children].forEach((b, k) => b.classList.toggle('sel', k === room.m));
   [...$('diffSeg').children].forEach((b, k) => b.classList.toggle('sel', k === room.d));
   if (document.activeElement !== $('size')) $('size').value = String(room.s);
+  if (document.activeElement !== $('look')) $('look').value = String(room.v);
+  const e = skinOf().emoji;
+  $('helpBomb').textContent = e.bomb;
+  $('helpItems').textContent = `${e.bomb} +1 бомба, ${e.fire} +1 до дальності, ${e.speed} швидкість, ${e.pass} прохід крізь бомби, ${e.resist} 10 с стійкості до вогню`;
   const forced = botsForced();
   $('bots').checked = room.b || forced;
   $('bots').disabled = forced;

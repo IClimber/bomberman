@@ -6,6 +6,7 @@ import { sfx } from './audio.js';
 import { dot } from './lobby.js';
 import { RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
 import { MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS } from './sim.js';
+import { skinOf } from './skins/index.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -29,7 +30,8 @@ const fmt = (ms) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
-const statsText = (nb, fp, sp, ps, rs) => `💣${nb} 🔥${fp}${sp ? ` 👟${sp}` : ''}${ps ? ' 👻' : ''}${rs ? ' 🛡' : ''}`;
+// Бонуси гравця — емодзі стилю графіки (e)
+const statsText = (e, nb, fp, sp, ps, rs) => `${e.bomb}${nb} ${e.fire}${fp}${sp ? ` ${e.speed}${sp}` : ''}${ps ? ` ${e.pass}` : ''}${rs ? ` ${e.resist}` : ''}`;
 const SD_TEXT = 'РАПТОВА СМЕРТЬ';
 function chipEls(items) {
   return items.map(([c, name, stats, alive, me]) => {
@@ -61,17 +63,19 @@ export function renderHud(now) {
     chipsKey = '';
     return;
   }
+  const em = skinOf().emoji;
+  if ($('bombBtn').textContent !== em.bomb) $('bombBtn').textContent = em.bomb;
   const items = R.sl.map((s, k) => {
     const me = k === S.mySlot;
-    const stats = s.a ? statsText(s.nb, s.fp, s.sp, s.ps, me || s.b ? s.rs > now : s.rsOn) : '💀';
+    const stats = s.a ? statsText(em, s.nb, s.fp, s.sp, s.ps, me || s.b ? s.rs > now : s.rsOn) : '💀';
     return [s.c, `${s.n}${me ? ' (ти)' : ''}`, stats, s.a, me];
   });
   const timer = $('timer');
-  const rk = `${innerWidth}x${innerHeight}:${document.fonts?.status}:${items.map(e => e[1]).join('\n')}`;
+  const rk = `${innerWidth}x${innerHeight}:${document.fonts?.status}:${Object.values(em).join('')}:${items.map(e => e[1]).join('\n')}`;
   if (rk !== reserveKey) {                                           // вимірюємо найгірший випадок; нижче все перемалюється
     reserveKey = rk;
     chipsKey = '';
-    const worst = statsText(MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS, true, true);
+    const worst = statsText(em, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS, true, true);
     $('chips').replaceChildren(...chipEls(items.map(([c, name, , , me]) => [c, name, worst, true, me])));
     timer.textContent = SD_TEXT;
     timer.classList.add('sd');
