@@ -169,6 +169,7 @@ function tick() {
   if (!S.room || !net.isHost()) { wasHost = false; return; }
   const now = net.sharedNow();
   if (!wasHost) { wasHost = true; becameHost(now); }
+  touchMember(net.id);                                             // і сам: став хостом, ще не бувши в лоббі (новачок, а єдиний гравець кімнати сховав вкладку)
   for (const p of net.peers()) touchMember(p.id);                  // чий hi ще не дійшов
   prune(pnow);
   // хтось сховав вкладку чи пішов — решта, можливо, вже всі готові
