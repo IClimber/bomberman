@@ -47,7 +47,7 @@ export function botTick(bot, dt, ctx) {
   if (L.react && !ctx.coop) {
     const fresh = b => b.o !== bot.o && b.t + L.react > ctx.now;
     for (const b of board.bombs.values()) if (fresh(b)) bombs--;
-    if (bombs < board.bombs.size) { let d = null; ctx = { ...ctx, danger: () => d || (d = board.danger(undefined, fresh)) }; }
+    if (bombs < board.bombs.size) { let d = null; ctx = { ...ctx, danger: () => d || (d = board.danger(undefined, fresh, true, bot.o)) }; }
   }
   let dist = speedOf(bot.sp) * dt;
   bot.mv = false;
@@ -94,7 +94,7 @@ function think(bot, ai, ctx, L) {
   const ms = 1000 / speedOf(bot.sp);
   const danger = ctx.danger();
   const mon = monOf(ctx, L);
-  const standOk = (i, t) => danger[i] === Infinity && board.wallAt[i] > t + WALL_SOON && monOk(mon, i, t) && !board.fireAt(i);
+  const standOk = (i, t) => danger[i] === Infinity && !danger.mine[i] && board.wallAt[i] > t + WALL_SOON && monOk(mon, i, t) && !board.fireAt(i);
   // не глухий кут, куди йде монстр: є куди відступити раніше за монстрів (для втечі й сховку від своєї бомби)
   const roomy = (i, t) => !ctx.reach || ctx.reach[i] > t + MON_FAR || room(bot, board, i, t, ms, danger, mon, L.spare) >= ROOM_SLACK;
   const tame = !ctx.coop && L.tame;                                 // «Один проти одного», «Легко»: див. LEVEL
@@ -105,7 +105,7 @@ function think(bot, ai, ctx, L) {
   if (!here || cramped) {
     if (ai.path.length && Math.random() < L.slip) return;          // «не помітив» — іде, куди йшов
     // монстр близько, а бомба є — ставимо заслін (крізь бомбу монстр не пройде) і тікаємо від неї
-    if (ctx.reach && danger[c] === Infinity && canBomb && canPlace(board, ai.tx, ai.ty) && !hitsAlly(board, c, bot.fp, ctx)
+    if (ctx.reach && danger[c] === Infinity && !danger.mine[c] && canBomb && canPlace(board, ai.tx, ai.ty) && !hitsAlly(board, c, bot.fp, ctx)
       && canEscape(bot, board, c, now, ms, danger, mon, L.spare, roomy)) {
       ai.path = []; ai.bomb = true;
       return;
@@ -134,7 +134,7 @@ function think(bot, ai, ctx, L) {
         let pick = -1, pickK = -Infinity;
         for (let i = 0; i < r2.dist.length; i++) {
           const t = now + r2.dist[i] * ms;
-          if (r2.dist[i] <= 0 || danger[i] !== Infinity || board.wallAt[i] < t + WALL_SOON || board.fireAt(i)) continue;
+          if (r2.dist[i] <= 0 || danger[i] !== Infinity || danger.mine[i] || board.wallAt[i] < t + WALL_SOON || board.fireAt(i)) continue;
           const k = Math.min(ctx.reach[i] - t, 5000) - r2.dist[i] * 50;
           if (k > pickK) { pickK = k; pick = i; }
         }
@@ -235,7 +235,7 @@ function pathOk(bot, ai, ctx, L) {
     from = j;
   }
   const j = ai.path[ai.path.length - 1];
-  return danger[j] === Infinity && board.wallAt[j] > t + WALL_SOON && monOk(mon, j, t) && !board.fireAt(j);
+  return danger[j] === Infinity && !danger.mine[j] && board.wallAt[j] > t + WALL_SOON && monOk(mon, j, t) && !board.fireAt(j);
 }
 
 // Чи можна стояти в клітинці i з моменту t з огляду на монстрів
@@ -313,15 +313,16 @@ function blastCells(board, i, p) {
   return cells;
 }
 
-// Чи буде куди втекти, якщо поставити бомбу в клітинці i в момент t. Сховок, до якого монстр може дійти,
+// Чи буде куди втекти, якщо поставити бомбу в клітинці i в момент t. Вогонь — з ланцюжком: зачеплені бомби вибухнуть разом
+// із нею (зокрема своя з детонатором, крізь вогонь якої інакше можна пройти). Сховок, до якого монстр може дійти,
 // поки бомба не догорить, — лише якщо з нього є куди відступити (roomy).
 function canEscape(bot, board, i, t, ms, danger, mon, spare, roomy) {
   const te = Math.min(t + FUSE_MS, danger[i]);
-  const hypo = new Map([...blastCells(board, i, bot.fp)].map(j => [j, Math.min(te, danger[j])]));
+  const hypo = new Map([...chainCells(board, i, bot.fp)].map(j => [j, Math.min(te, danger[j])]));
   const r = bfs(bot, board, i, t, ms, danger, hypo, mon, spare, i);
   for (let j = 0; j < r.dist.length; j++) {
     const tj = t + r.dist[j] * ms;
-    if (r.dist[j] < 0 || hypo.has(j) || danger[j] !== Infinity || board.fireAt(j) || !monOk(mon, j, tj)) continue;
+    if (r.dist[j] < 0 || hypo.has(j) || danger[j] !== Infinity || danger.mine[j] || board.fireAt(j) || !monOk(mon, j, tj)) continue;
     if (mon.reach && !(mon.reach[j] > te + FLAME_MS) && !roomy(j, tj)) continue;
     if (board.wallAt[j] > tj + WALL_SOON) return true;
   }
@@ -329,8 +330,8 @@ function canEscape(bot, board, i, t, ms, danger, mon, spare, roomy) {
 }
 
 // Чи можна зайти в клітинку j (з клітинки from), дійшовши до її центру в момент ta: вона прохідна, не горить, а перший вибух
-// у ній (danger / hypo) буде вже після того, як ми з неї вийдемо (або останній уже минув). Під бомбою з детонатором
-// (danger.any) — лише зсередини її ж вогню, коли тікаємо: ззовні туди не заходимо.
+// у ній (danger / hypo) буде вже після того, як ми з неї вийдемо (або останній уже минув). Під чужою бомбою з детонатором
+// (danger.any) — лише зсередини її ж вогню, коли тікаємо: ззовні туди не заходимо. Крізь вогонь своєї (danger.mine) — можна.
 // Монстри (mon): «Легко» — не заходимо в клітинки поруч із ними; інакше — лише в ті, які встигнемо пройти раніше за них.
 function canEnter(bot, board, j, ta, ms, danger, hypo, mon, spare, from) {
   const GW = board.map.GW, x = j % GW;
@@ -374,30 +375,33 @@ function pathTo(r, goal) {
 // Чи можна боту поставити бомбу тут (для хоста)
 export const botCanPlace = (bot, board) => board.activeOf(bot.o) < bot.nb && canPlace(board, Math.round(bot.x), Math.round(bot.y));
 
-// Детонатор: яку свою бомбу підірвати зараз (null — жодну). Підриваємо, щойно самі (де стоїмо і куди йдемо) і, в «Команді»,
-// свої поза її вогнем (з ланцюжком): коли вибухнула б звичайна або, якщо у вогні суперник (монстр), — після detAge.
-// Від бомби з детонатором бот тікає, як від звичайної (Board.danger), тож потім підриває її здалеку.
+// Детонатор: яку свою бомбу підірвати зараз (null — жодну). Підриваємо, щойно самі (де стоїмо, куди йдемо і куди за шляхом
+// зайдемо, поки горітиме) і, в «Команді», свої поза її вогнем (з ланцюжком): коли вибухнула б звичайна або, якщо у вогні
+// суперник (монстр), — після detAge. З вогню своєї такої бомби бот іде (стояти там не можна, пройти — можна: Board.danger),
+// тож потім підриває її здалеку.
 export function botDetonate(bot, ctx) {
   const { board, now } = ctx, GW = board.map.GW, L = LEVEL[ctx.diff] ?? LEVEL[1];
   const at = (e) => Math.round(e.y) * GW + Math.round(e.x);
+  const ms = 1000 / speedOf(bot.sp);
+  const soon = bot.ai ? [bot.ai.ty * GW + bot.ai.tx, ...bot.ai.path.filter((j, k) => (k + 0.5) * ms < FLAME_MS + 150)] : [];
   for (const a of board.remoteOf(bot.o)) {
-    const fire = chainCells(board, a);
-    if (fire.has(at(bot)) || (bot.ai && fire.has(bot.ai.ty * GW + bot.ai.tx))) continue;
+    const fire = chainCells(board, a.i, a.b.p);
+    if (fire.has(at(bot)) || soon.some(j => fire.has(j))) continue;
     if (ctx.coop && ctx.allies.some(e => fire.has(at(e)))) continue;
     const age = now - a.b.t;
     if (age >= FUSE_MS || (age >= L.detAge && ctx.enemies.some(e => fire.has(at(e))))) return a;
   }
   return null;
 }
-// Клітинки вогню бомби a разом із ланцюжком (бомби, які він зачепить, — і їхній вогонь)
-function chainCells(board, a) {
-  const cells = new Set(), seen = new Set([a.i]), q = [a];
+// Клітинки вогню бомби з клітинки i дальністю p разом із ланцюжком (бомби, які він зачепить, — і їхній вогонь)
+function chainCells(board, i, p) {
+  const cells = new Set(), seen = new Set([i]), q = [[i, p]];
   while (q.length) {
-    const b = q.pop();
-    for (const j of blastCells(board, b.i, b.b.p)) {
+    const [k, pk] = q.pop();
+    for (const j of blastCells(board, k, pk)) {
       cells.add(j);
       const o = board.active.get(j);
-      if (o && !seen.has(j)) { seen.add(j); q.push(o); }
+      if (o && !seen.has(j)) { seen.add(j); q.push([j, o.b.p]); }
     }
   }
   return cells;

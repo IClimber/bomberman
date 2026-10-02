@@ -475,14 +475,17 @@ export class Board {
   // (стільки є, щоб вибратися з її вогню) і не раніше, ніж минув би запал; last — Infinity («після вогню» там не пройти);
   // d.any[i] = 1 — клітинка під такою бомбою: заходити туди ззовні не можна (див. canEnter у bots.js).
   // Для монстрів (remote = false) — не вибухне, поки не підірвуть: вони не знають коли.
-  danger(horizon = FUSE_MS + FLAME_MS, skip = null, remote = true) {
+  // Свої бомби з детонатором (слот own) бот підриває сам, лише коли він поза їхнім вогнем (botDetonate): для нього вони не
+  // вибухають, поки не підірвали чи не зачепив чужий вогонь, а клітинки їхнього вогню — d.mine[i] = 1: пройти можна,
+  // стояти — ні (звідти не підірвати). Інакше своя бомба відрізала боту втечу від чужої, і він стояв під нею.
+  danger(horizon = FUSE_MS + FLAME_MS, skip = null, remote = true, own = -1) {
     const n = this.cell.length, d = new Float64Array(n).fill(Infinity), last = new Float64Array(n).fill(-Infinity);
-    const anyCell = new Uint8Array(n);
+    const anyCell = new Uint8Array(n), mine = new Uint8Array(n);
     const c = Object.create(Board.prototype);
     const active = new Map();
     for (const [i, a] of this.active) {
       if (skip && skip(a.b)) continue;
-      const any = remote && a.te === Infinity;
+      const any = remote && a.te === Infinity && a.b.o !== own;
       active.set(i, { ...a, te: any ? Math.max(a.b.t + FUSE_MS, this.T + REMOTE_ESCAPE) : a.te, any });
     }
     Object.assign(c, this, {
@@ -503,8 +506,12 @@ export class Board {
     };
     c.dropWall = (i) => { if (c.wallAt[i] < d[i]) d[i] = c.wallAt[i]; Board.prototype.dropWall.call(c, i); };
     c.run(this.T + horizon);
+    c.hit = (i) => { mine[i] = 1; };                               // свої, що так і не вибухнули: куди дістане їхній вогонь
+    c.explode = Board.prototype.explode;
+    for (const a of [...c.active.values()]) if (a.b.o === own && a.te === Infinity) c.explode(a, Infinity);
     d.last = last;
     d.any = anyCell;
+    d.mine = mine;
     return d;
   }
 }

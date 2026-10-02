@@ -104,8 +104,10 @@ export function hostStep(R, now, dt, ev) {
   for (const s of R.sl) {
     if (!s.a || !s.b) continue;
     const others = R.sl.filter(e => e.a && e !== s);
+    let mine = null;                                               // свої бомби з детонатором бот підірве сам (Board.danger)
+    const own = B.remoteOf(s.o).length ? () => mine || (mine = B.danger(undefined, null, true, s.o)) : danger;
     const ctx = {
-      board: B, now, diff: R.bd, coop: R.coop, danger, threat, reach,
+      board: B, now, diff: R.bd, coop: R.coop, danger: own, threat, reach,
       enemies: R.coop ? R.mons.filter(m => m.a) : others, allies: R.coop ? others : [],
       monsters: R.coop ? R.mons.filter(m => m.a) : null,
     };

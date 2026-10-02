@@ -318,3 +318,20 @@ test('детонатор: бот ставить бомбу, відходить �
   assert.deepEqual(dets, [{ o: 1, n: 1, b: 0, t: Q.sl[1].dt + FUSE_MS }]);
   assert.equal(B.bombAt(B.idx(1, 11)), null);                      // вибухла
 }));
+
+test('детонатор: від чужої бомби бот тікає крізь вогонь своєї (її він підірве сам) і підриває її, вийшовши', () => {
+  for (const diff of [0, 1, 2]) withRandom(0.5, () => {
+    const R = botRound(diff, 5, 1), B = R.board, bot = R.sl[1];
+    bot.rc = true;
+    B.cell[B.idx(5, 2)] = BLOCK;                                   // з (5, 1) вихід лише ліворуч, крізь вогонь своєї
+    B.addBomb({ o: 1, n: 1, x: 3, y: 2, t: 1000, p: 1, rc: true }); // своя: вогонь (3, 1), (3, 2), (3, 3)
+    B.addBomb({ o: 0, n: 1, x: 7, y: 1, t: 1000, p: 3 });           // людина: вогонь (4..10, 1)
+    let det = 0;
+    for (let t = 1050; t <= 4500; t += 50) {
+      hostStep(R, t, 0.05, { ...noop, det(e) { if (e.o === 1 && !det) det = t; } });
+      if (det === t) assert.ok(![[3, 1], [3, 2], [3, 3]].some(([x, y]) => Math.round(bot.x) === x && Math.round(bot.y) === y));
+    }
+    assert.ok(bot.a, `рівень ${diff}`);
+    assert.ok(det > 0, `рівень ${diff}: не підірвав`);
+  });
+});

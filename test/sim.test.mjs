@@ -353,6 +353,25 @@ test('небезпека й детонатор: для ботів — будь-�
   assert.equal(b.active.size, 1);
 });
 
+test('небезпека й детонатор: свої бот підірве сам — не вибухають, крім ланцюжка; у їхньому вогні не стояти (d.mine)', () => {
+  const m = emptyMap();
+  const b = new Board(m, 0);
+  b.addBomb({ o: 0, n: 1, x: 3, y: 1, t: 0, p: 2, rc: true });
+  b.addBomb({ o: 1, n: 1, x: 3, y: 5, t: 0, p: 1, rc: true });
+  b.advance(500);
+  let d = b.danger(undefined, null, true, 0);
+  assert.equal(d[at(m, 4, 1)], Infinity);                         // своя
+  assert.ok(d.mine[at(m, 4, 1)] && d.mine[at(m, 3, 1)] && d.mine[at(m, 3, 3)] && !d.mine[at(m, 6, 1)] && !d.any[at(m, 4, 1)]);
+  assert.equal(d[at(m, 3, 6)], FUSE_MS);                          // чужа — як і була
+  assert.ok(d.any[at(m, 3, 6)] && !d.mine[at(m, 3, 6)]);
+  assert.equal(b.danger()[at(m, 4, 1)], FUSE_MS);                 // для інших — будь-якої миті
+  b.addBomb({ o: 2, n: 1, x: 5, y: 1, t: 400, p: 2 });           // чужий вогонь зачепить свою — ланцюжок
+  b.advance(500);
+  d = b.danger(undefined, null, true, 0);
+  assert.equal(d[at(m, 2, 1)], 400 + FUSE_MS);
+  assert.ok(!d.mine[at(m, 2, 1)]);
+});
+
 test('знімок для глядача: бомба з детонатором', () => {
   const m = emptyMap();
   const host = new Board(m, 0);
