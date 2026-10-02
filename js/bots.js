@@ -24,6 +24,7 @@ const WALL_SOON = 4000;              // клітинка, куди за стіл
 const ROOM_DEPTH = 6;                // «Нормально», «Важко»: з клітинки, до якої може дійти монстр, має бути куди відступити —
 const ROOM_SLACK = 1000;             // за ROOM_DEPTH кроків, раніше за монстрів, туди, де до них ще стільки мс
 const MON_FAR = 3000;                // монстр дійде не раніше, ніж за стільки мс, — простір не перевіряємо
+const LAST_SPARE = 120;              // втеча без запасу spare: з клітинки, що вибухне, вийти (пів кроку) хоч за стільки мс до вибуху
 
 const BACK = [0, 3, 4, 1, 2];
 
@@ -34,19 +35,41 @@ export function botTick(bot, dt, ctx) {
   const L = LEVEL[ctx.diff] ?? LEVEL[1];
   const ai = bot.ai || (bot.ai = { next: 0, seen: -1, path: [], bomb: false, tx: null, ty: null, goal: -1, allyWait: 0, tabu: new Map() });
   if (ai.tx == null) { ai.tx = Math.round(bot.x); ai.ty = Math.round(bot.y); }
-  const atCenter = bot.x === ai.tx && bot.y === ai.ty;
-  const fresh = ctx.board.bombs.size !== ai.seen;                  // з'явилась нова бомба — подумати одразу
-  if (atCenter && (ctx.now >= ai.next || fresh)) {
-    ai.next = ctx.now + L.think * (0.8 + Math.random() * 0.4);
-    ai.seen = ctx.board.bombs.size;
-    think(bot, ai, ctx, L);
+  const board = ctx.board, GW = board.map.GW;
+  let dist = speedOf(bot.sp) * dt;
+  bot.mv = false;
+  // Рух за шляхом від центру до центру. Стоїть — думає раз на think мс; іде — в центрі клітинки (і посеред тіку), лише
+  // коли нова бомба робить шлях небезпечним (одразу) або клітинка під вибухом: інакше на довгому шляху не бачив нових
+  // бомб і заходив у їхній вогонь, а якби думав у кожному центрі — перемикався б між цілями й тупцяв
+  for (let g = 0; g < 4; g++) {
+    if (bot.x === ai.tx && bot.y === ai.ty) {
+      if (board.bombs.size !== ai.seen && ai.path.length && pathOk(bot, ai, ctx, L)) ai.seen = board.bombs.size;
+      if (board.bombs.size !== ai.seen
+        || ctx.now >= ai.next && (!ai.path.length || ctx.danger()[ai.ty * GW + ai.tx] !== Infinity)) {
+        ai.next = ctx.now + L.think * (0.8 + Math.random() * 0.4);
+        ai.seen = board.bombs.size;
+        think(bot, ai, ctx, L);
+      }
+      if (ai.bomb) {
+        ai.bomb = false;
+        ai.next = 0;                                               // одразу шукати, куди тікати
+        return true;
+      }
+      if (!ai.path.length || dist <= 1e-9) return false;
+      const j = ai.path[0], jx = j % GW, jy = (j - jx) / GW;
+      const d = jx === ai.tx + 1 && jy === ai.ty ? 2 : jx === ai.tx - 1 && jy === ai.ty ? 4
+        : jy === ai.ty + 1 && jx === ai.tx ? 3 : jy === ai.ty - 1 && jx === ai.tx ? 1 : 0;
+      if (!d || board.solid(jx, jy, false, bot.ps)) { ai.path = []; ai.next = 0; return false; }
+      ai.path.shift();
+      ai.tx = jx; ai.ty = jy; bot.dr = d;
+    } else if (board.solid(ai.tx, ai.ty, false, bot.ps) && Math.abs(bot.x - ai.tx) + Math.abs(bot.y - ai.ty) > 0.5) {
+      ai.tx -= DX[bot.dr]; ai.ty -= DY[bot.dr]; bot.dr = BACK[bot.dr];   // попереду з'явилась бомба — назад і думати знову
+      ai.path = []; ai.next = 0;
+    }
+    if (dist <= 1e-9) return false;
+    dist = stepTo(bot, ai.tx, ai.ty, dist);
+    bot.mv = true;
   }
-  if (atCenter && ai.bomb) {
-    ai.bomb = false;
-    ai.next = 0;                                                   // одразу шукати, куди тікати
-    return true;
-  }
-  follow(bot, ai, dt, ctx.board);
   return false;
 }
 
@@ -55,7 +78,7 @@ function think(bot, ai, ctx, L) {
   const c = ai.ty * GW + ai.tx;
   const ms = 1000 / speedOf(bot.sp);
   const danger = ctx.danger();
-  const mon = { threat: ctx.threat, reach: ctx.reach, cross: L.cross, hold: L.hold };
+  const mon = monOf(ctx, L);
   const standOk = (i, t) => danger[i] === Infinity && board.wallAt[i] > t + WALL_SOON && monOk(mon, i, t) && !board.fireAt(i);
   // не глухий кут, куди йде монстр: є куди відступити раніше за монстрів (для втечі й сховку від своєї бомби)
   const roomy = (i, t) => !ctx.reach || ctx.reach[i] > t + MON_FAR || room(bot, board, i, t, ms, danger, mon, L.spare) >= ROOM_SLACK;
@@ -69,7 +92,12 @@ function think(bot, ai, ctx, L) {
       ai.path = []; ai.bomb = true;
       return;
     }
-    const r = bfs(bot, board, c, now, ms, danger, null, mon, L.spare);
+    let spare = L.spare, r = bfs(bot, board, c, now, ms, danger, null, mon, spare);
+    // із запасом spare не втекти — без нього: стояти на місці під вибухом — напевно загинути
+    if (danger[c] !== Infinity && !r.dist.some((d, i) => d > 0 && standOk(i, now + d * ms))) {
+      spare = Math.min(spare, LAST_SPARE - ms / 2);
+      r = bfs(bot, board, c, now, ms, danger, null, mon, spare);
+    }
     // без виходу — туди, де вибухне найпізніше, а при рівності — найдалі від монстрів
     let late = c, lateK = -Infinity;
     const safe = [];
@@ -84,7 +112,7 @@ function think(bot, ai, ctx, L) {
     if (best >= 0 || !cramped) {                                   // тісно, а просторіше ніде — далі як звичайно
       if (best < 0 && safe.length) best = safe[0];
       if (best < 0 && ctx.reach && danger[c] !== Infinity) {       // від вогню не втекти, не ризикнувши з монстром, — ризикуємо
-        const r2 = bfs(bot, board, c, now, ms, danger, null, null, L.spare);
+        const r2 = bfs(bot, board, c, now, ms, danger, null, null, spare);
         let pick = -1, pickK = -Infinity;
         for (let i = 0; i < r2.dist.length; i++) {
           const t = now + r2.dist[i] * ms;
@@ -161,6 +189,21 @@ function pressure(ctx, i, GW) {
   if (ctx.coop) return 0;
   const x = i % GW, y = (i - x) / GW;
   return ctx.enemies.some(e => Math.abs(Math.round(e.x) - x) + Math.abs(Math.round(e.y) - y) <= 2) ? 1 : 0;
+}
+
+const monOf = (ctx, L) => ({ threat: ctx.threat, reach: ctx.reach, cross: L.cross, hold: L.hold });
+
+// Нова бомба: чи можна йти далі за шляхом (так, як його пропустив би bfs) і стояти там, куди він веде
+function pathOk(bot, ai, ctx, L) {
+  const { board, now } = ctx, GW = board.map.GW, danger = ctx.danger(), mon = monOf(ctx, L), ms = 1000 / speedOf(bot.sp);
+  if (danger[ai.ty * GW + ai.tx] !== Infinity) return false;
+  let t = now;
+  for (const j of ai.path) {
+    t += ms;
+    if (!canEnter(bot, board, j, t, ms, danger, null, mon, L.spare)) return false;
+  }
+  const j = ai.path[ai.path.length - 1];
+  return danger[j] === Infinity && board.wallAt[j] > t + WALL_SOON && monOk(mon, j, t) && !board.fireAt(j);
 }
 
 // Чи можна стояти в клітинці i з моменту t з огляду на монстрів
@@ -248,10 +291,22 @@ function canEscape(bot, board, i, t, ms, danger, mon, spare, roomy) {
   return false;
 }
 
-// Пошук у ширину від клітинки start (час t0): у клітинку можна, якщо вона прохідна, не горить,
-// а вибух у ній (danger / hypo) буде вже після того, як ми з неї вийдемо (або вже минув).
-// bombAt — клітинка гіпотетичної бомби: стоїмо на ній, тож з неї вийти можна, а повернутися — ні.
+// Чи можна зайти в клітинку j, дійшовши до її центру в момент ta: вона прохідна, не горить, а перший вибух у ній
+// (danger / hypo) буде вже після того, як ми з неї вийдемо (або останній уже минув).
 // Монстри (mon): «Легко» — не заходимо в клітинки поруч із ними; інакше — лише в ті, які встигнемо пройти раніше за них.
+function canEnter(bot, board, j, ta, ms, danger, hypo, mon, spare) {
+  const GW = board.map.GW, x = j % GW;
+  if (board.solid(x, (j - x) / GW, false, bot.ps)) return false;
+  if (mon && (mon.reach ? !(mon.reach[j] > ta + ms * 0.5 + mon.cross) : mon.threat && mon.threat[j])) return false;
+  let dj = danger[j], dl = danger.last[j];                        // перший і останній вибух у клітинці
+  if (hypo && hypo.has(j)) { const h = hypo.get(j); dj = Math.min(dj, h); dl = Math.max(dl, h); }
+  if (board.fireAt(j) && !(ta > board.fireUntil[j] + 100 && ta > board.T + FLAME_MS + 150)) return false;   // догорить до нас
+  if (dj !== Infinity && !(ta + ms + spare < dj || ta > dl + FLAME_MS + 150)) return false;
+  return board.wallAt[j] >= ta + ms + 500;
+}
+
+// Пошук у ширину від клітинки start (час t0) клітинками, куди можна зайти (canEnter).
+// bombAt — клітинка гіпотетичної бомби: стоїмо на ній, тож з неї вийти можна, а повернутися — ні.
 function bfs(bot, board, start, t0, ms, danger, hypo, mon, spare, bombAt = -1, maxD = Infinity) {
   const { GW, GH } = board.map, n = GW * GH;
   const dist = new Int16Array(n).fill(-1), prev = new Int32Array(n).fill(-1);
@@ -262,14 +317,8 @@ function bfs(bot, board, start, t0, ms, danger, hypo, mon, spare, bombAt = -1, m
     if (dist[i] >= maxD) continue;
     const ta = t0 + (dist[i] + 1) * ms;
     for (let d = 1; d <= 4; d++) {
-      const nx = x + DX[d], ny = y + DY[d], j = ny * GW + nx;
-      if (dist[j] >= 0 || j === bombAt || board.solid(nx, ny, false, bot.ps)) continue;
-      if (mon && (mon.reach ? !(mon.reach[j] > ta + ms * 0.5 + mon.cross) : mon.threat && mon.threat[j])) continue;
-      let dj = danger[j];
-      if (hypo && hypo.has(j)) dj = Math.min(dj, hypo.get(j));
-      if (board.fireAt(j) && !(ta > board.fireUntil[j] + 100 && ta > board.T + FLAME_MS + 150)) continue;   // догорить до нас
-      if (dj !== Infinity && !(ta + ms + spare < dj || ta > dj + FLAME_MS + 150)) continue;
-      if (board.wallAt[j] < ta + ms + 500) continue;
+      const j = (y + DY[d]) * GW + x + DX[d];
+      if (dist[j] >= 0 || j === bombAt || !canEnter(bot, board, j, ta, ms, danger, hypo, mon, spare)) continue;
       dist[j] = dist[i] + 1;
       prev[j] = i;
       q.push(j);
@@ -281,29 +330,6 @@ function pathTo(r, goal) {
   const path = [];
   for (let i = goal; i >= 0 && r.dist[i] > 0; i = r.prev[i]) path.push(i);
   return path.reverse();
-}
-
-// Рух за шляхом: від центру до центру; якщо попереду з'явилась бомба — назад і думати знову
-function follow(bot, ai, dt, board) {
-  const GW = board.map.GW;
-  let dist = speedOf(bot.sp) * dt;
-  bot.mv = false;
-  for (let g = 0; g < 4 && dist > 1e-9; g++) {
-    if (bot.x === ai.tx && bot.y === ai.ty) {
-      if (!ai.path.length) return;
-      const j = ai.path[0], jx = j % GW, jy = (j - jx) / GW;
-      const d = jx === ai.tx + 1 && jy === ai.ty ? 2 : jx === ai.tx - 1 && jy === ai.ty ? 4
-        : jy === ai.ty + 1 && jx === ai.tx ? 3 : jy === ai.ty - 1 && jx === ai.tx ? 1 : 0;
-      if (!d || board.solid(jx, jy, false, bot.ps)) { ai.path = []; ai.next = 0; return; }
-      ai.path.shift();
-      ai.tx = jx; ai.ty = jy; bot.dr = d;
-    } else if (board.solid(ai.tx, ai.ty, false, bot.ps) && Math.abs(bot.x - ai.tx) + Math.abs(bot.y - ai.ty) > 0.5) {
-      ai.tx -= DX[bot.dr]; ai.ty -= DY[bot.dr]; bot.dr = BACK[bot.dr];
-      ai.path = []; ai.next = 0;
-    }
-    dist = stepTo(bot, ai.tx, ai.ty, dist);
-    bot.mv = true;
-  }
 }
 
 // Чи можна боту поставити бомбу тут (для хоста)

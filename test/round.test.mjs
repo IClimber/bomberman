@@ -146,3 +146,38 @@ test('досяжність монстрів: шляхом по прохідни�
   assert.ok(Math.abs(reach(0) - (6 - TOUCH) / v * 1000) < 1e-6);   // в обхід стовпа: шість кроків
   assert.ok(Math.abs(reach(2) - (2 - TOUCH) / gv * 1000) < 1e-6);  // крізь блок: два
 });
+
+// Раунд «Один проти одного» на порожній карті: слот 0 — людина в (1, 11), слот 1 — бот рівня diff у (x, y)
+function botRound(diff, x, y) {
+  const R = newRound({ r: 1, seed: 5, m: MODE_VS, s: 0, d: diff, t0: 0, sl: people(1, 1) });
+  R.board = new Board(emptyMap(), 0);
+  Object.assign(R.sl[0], { x: 1, y: 11 });
+  Object.assign(R.sl[1], { x, y });
+  return R;
+}
+
+test('бот на довгому шляху помічає нову бомбу й не заходить у її вогонь', () => withRandom(0.5, () => {
+  const R = botRound(1, 1, 1), bot = R.sl[1], GW = R.board.map.GW;
+  bot.sp = 1;                                         // 3,7 клітинки за секунду: кінець тіку не потрапляє в центр клітинки
+  const path = [];
+  for (let x = 2; x <= 11; x++) path.push(GW + x);
+  for (let y = 2; y <= 9; y++) path.push(y * GW + 11);
+  bot.ai = { next: Infinity, seen: 0, path, bomb: false, tx: 1, ty: 1, goal: -1, allyWait: 0, tabu: new Map() };
+  // вибухне, коли бот, ідучи далі за шляхом, був би в (11, 5)
+  const ms = 1000 / 3.7, te = 14 * ms, tb = Math.round((te - FUSE_MS) / 50) * 50;
+  let t = 0;
+  while (t < te + 1000) {
+    t += 50;
+    if (t === tb) R.board.addBomb({ o: 0, n: 1, x: 9, y: 5, t: tb, p: 2 });
+    hostStep(R, t, 0.05, noop);
+  }
+  assert.ok(bot.a);
+}));
+
+test('бот тікає з-під вибуху й тоді, коли на запас spare часу вже немає', () => withRandom(0.5, () => {
+  const R = botRound(1, 4, 1), bot = R.sl[1];        // (4, 1): угору й униз стовпи — два кроки до безпечної клітинки
+  R.board.addBomb({ o: 0, n: 1, x: 6, y: 1, t: 0, p: 3 });
+  let t = 1750;                                       // до вибуху 0,75 с
+  while (t < FUSE_MS + 600) { t += 50; hostStep(R, t, 0.05, noop); }
+  assert.ok(bot.a);
+}));

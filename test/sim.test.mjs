@@ -213,6 +213,19 @@ test('небезпека: клітинка, що горить зараз, — з
   assert.equal(d[at(m, 2, 1)], Infinity);            // горить, але більше не зачепить
 });
 
+test('небезпека: дві бомби зачеплять клітинку в різний час — перший вибух і останній (d.last)', () => {
+  const m = emptyMap();
+  const b = new Board(m, 0);
+  b.addBomb({ o: 0, n: 1, x: 1, y: 1, t: 0, p: 2 });
+  b.addBomb({ o: 1, n: 1, x: 5, y: 1, t: 500, p: 2 });    // не ланцюжок: вогні лише сходяться в (3, 1)
+  b.advance(600);
+  const d = b.danger();
+  assert.equal(d[at(m, 3, 1)], FUSE_MS);
+  assert.equal(d.last[at(m, 3, 1)], 500 + FUSE_MS);
+  assert.equal(d.last[at(m, 2, 1)], FUSE_MS);
+  assert.equal(d.last[at(m, 9, 1)], -Infinity);
+});
+
 test('рух: по коридору, зупинка перед стіною, доворот у прохід, зійти зі своєї бомби', () => {
   const m = emptyMap();
   const b = new Board(m, 0);
