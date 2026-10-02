@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  newRound, hostStep, outcome, checkEnd, kill, applyItem, deadlyAt, killerAt, KB_WALL, KB_MON, KB_NONE,
+  newRound, hostStep, outcome, checkEnd, kill, applyItem, deadlyAt, killerAt, orphanDets, KB_WALL, KB_MON, KB_NONE,
   MODE_VS, MODE_COOP, RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, END_GRACE_MS,
 } from '../js/round.js';
 import {
@@ -285,3 +285,29 @@ test('«Один проти одного», «Легко»: без бомби «
   assert.equal(most(2), 3);
   assert.equal(most(0), 1);
 });
+
+test('детонатор: бот ставить бомбу, відходить і підриває її сам; загиблий бот — його бомби вибухають за запал', () => withRandom(0.5, () => {
+  const R = twoBots(MODE_VS, 1, 1, 13, 11), bot = R.sl[0];
+  bot.rc = true;
+  R.board.cell[R.board.idx(3, 1)] = BLOCK;                         // є що підірвати
+  let t = 0, placed = 0, det = 0;
+  const ev = { ...noop, bomb(b) { if (!placed && b.o === 0) placed = t; }, det(e) { if (!det && e.o === 0) det = t; } };
+  while (t < 8000 && !det) { t += 50; hostStep(R, t, 0.05, ev); }
+  assert.ok(placed > 0 && det > placed, `поставив ${placed}, підірвав ${det}`);
+  assert.ok(bot.a);
+  for (let k = 0; k < 20; k++) { t += 50; hostStep(R, t, 0.05, noop); }
+  assert.equal(R.board.cell[R.board.idx(3, 1)], EMPTY);
+
+  const Q = twoBots(MODE_VS, 1, 1, 9, 9), B = Q.board;          // бот 1 замкнений у (9, 9): відкрито лише вгору, під вогонь
+  for (const [x, y] of [[8, 9], [10, 9], [9, 10]]) B.cell[B.idx(x, y)] = BLOCK;
+  B.addBomb({ o: 1, n: 1, x: 1, y: 11, t: 0, p: 1, rc: true });
+  B.addBomb({ o: 0, n: 1, x: 9, y: 7, t: 0, p: 3 });
+  B.advance(100);
+  assert.deepEqual(orphanDets(Q, 1, 100), [{ o: 1, n: 1, b: 0, t: 100 + FUSE_MS }]);
+  const dets = [];
+  let tt = 0;
+  while (tt < 2 * FUSE_MS + 200) { tt += 50; hostStep(Q, tt, 0.05, { ...noop, det(e) { dets.push(e); } }); }
+  assert.ok(!Q.sl[1].a);
+  assert.deepEqual(dets, [{ o: 1, n: 1, b: 0, t: Q.sl[1].dt + FUSE_MS }]);
+  assert.equal(B.bombAt(B.idx(1, 11)), null);                      // вибухла
+}));

@@ -14,6 +14,12 @@ import winter from './winter.js';
 import space from './space.js';
 import halloween from './halloween.js';
 import hawaii from './hawaii.js';
+import notebook from './notebook.js';
+import village from './village.js';
+import egypt from './egypt.js';
+import west from './west.js';
+import candy from './candy.js';
+import ocean from './ocean.js';
 
-export const SKINS = [classic, cyber, retro, winter, space, halloween, hawaii];
+export const SKINS = [classic, cyber, retro, winter, space, halloween, hawaii, notebook, village, egypt, west, candy, ocean];
 export const skinOf = () => SKINS[S.room?.v] || SKINS[0];               // стиль кімнати
