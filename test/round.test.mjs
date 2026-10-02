@@ -247,3 +247,24 @@ test('«Один проти одного»: на «Легко» й «Норма�
   assert.equal(run(0, 1000).moved, false);
   assert.deepEqual(run(0, FUSE_MS + 600), { moved: true, alive: true });   // помітив — утік (униз, у (5, 2))
 }));
+
+test('«Один проти одного», «Легко»: без бомби «для тиску» і не більше однієї бомби за раз', () => {
+  const pressed = (diff) => withRandom(0.5, () => {
+    const R = botRound(diff, 6, 5);
+    Object.assign(R.sl[0], { x: 5, y: 4 });            // людина за 2 клітинки, не на лінії вогню
+    let n = 0;
+    hostStep(R, 50, 0.05, { ...noop, bomb() { n++; } });
+    return n;
+  });
+  assert.equal(pressed(2), 1);
+  assert.equal(pressed(0), 0);
+  const most = (diff) => withRandom(0.3, () => {      // звичайна карта, у бота три бомби: скільки найбільше стоїть разом
+    const R = newRound({ r: 1, seed: 5, m: MODE_VS, s: 0, d: diff, t0: 0, sl: people(1, 1) });
+    R.sl[1].nb = 3;
+    let n = 0;
+    for (let t = 50; t < 20000; t += 50) { hostStep(R, t, 0.05, noop); n = Math.max(n, R.board.activeOf(1)); }
+    return n;
+  });
+  assert.equal(most(2), 3);
+  assert.equal(most(0), 1);
+});

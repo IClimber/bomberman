@@ -6,14 +6,15 @@
 import { DX, DY, FUSE_MS, FLAME_MS, BLOCK, PILLAR, WALL, speedOf, canPlace } from './sim.js';
 import { stepTo } from './monsters.js';
 
-// Складність: think — як часто думає (мс); slip — імовірність не помітити небезпеку цього разу;
+// Складність: think — як часто думає (мс; vsThink — у «Один проти одного»); slip — імовірність не помітити небезпеку цього разу;
 // aggro — імовірність поставити бомбу, коли є ціль; spare — запас часу на втечу (мс);
 // react — («Один проти одного») через скільки мс бот помічає чужу бомбу: без цього рівні там майже не відрізнялись —
-// усі тікали від вогню однаково досконало;
+// усі тікали від вогню однаково досконало; tame — («Один проти одного») «смирний»: не полює на суперників (у вогні —
+// як блок, без бомби «для тиску» і тяги до них), одна бомба за раз, по бонуси не йде;
 // монстри («Нормально», «Важко», див. monsterReach): cross — запас (мс), з яким пройти клітинку раніше за монстра,
 // hold — скільки (мс) монстр не повинен устигнути дійти туди, де бот стоїть
 const LEVEL = [
-  { think: 450, slip: 0.3, aggro: 0.5, spare: 650, react: 1200 },
+  { think: 450, vsThink: 600, slip: 0.3, aggro: 0.5, spare: 650, react: 1600, tame: true },
   { think: 250, slip: 0.08, aggro: 0.8, spare: 400, react: 600, cross: 200, hold: 700 },
   { think: 120, slip: 0, aggro: 1, spare: 350, cross: 0, hold: 800 },
 ];
@@ -58,7 +59,7 @@ export function botTick(bot, dt, ctx) {
       if (bombs !== ai.seen
         || ctx.now >= ai.next && (!ai.path.length || ctx.danger()[ai.ty * GW + ai.tx] !== Infinity
           || ai.roam && ctx.enemies.some(e => Math.abs(e.x - ai.tx) + Math.abs(e.y - ai.ty) <= NEAR))) {
-        ai.next = ctx.now + L.think * (0.8 + Math.random() * 0.4);
+        ai.next = ctx.now + (!ctx.coop && L.vsThink || L.think) * (0.8 + Math.random() * 0.4);
         ai.seen = bombs;
         think(bot, ai, ctx, L);
       }
@@ -94,7 +95,9 @@ function think(bot, ai, ctx, L) {
   const standOk = (i, t) => danger[i] === Infinity && board.wallAt[i] > t + WALL_SOON && monOk(mon, i, t) && !board.fireAt(i);
   // не глухий кут, куди йде монстр: є куди відступити раніше за монстрів (для втечі й сховку від своєї бомби)
   const roomy = (i, t) => !ctx.reach || ctx.reach[i] > t + MON_FAR || room(bot, board, i, t, ms, danger, mon, L.spare) >= ROOM_SLACK;
-  const canBomb = board.activeOf(bot.o) < bot.nb;
+  const tame = !ctx.coop && L.tame;                                 // «Один проти одного», «Легко»: див. LEVEL
+  const canBomb = board.activeOf(bot.o) < (tame ? 1 : bot.nb);
+  const foe = tame ? 1 : 4;                                        // цінність суперника у вогні
   const here = standOk(c, now), cramped = here && !roomy(c, now);   // cramped — глухий кут, до якого йде монстр
   ai.roam = false;
   if (!here || cramped) {
@@ -145,7 +148,7 @@ function think(bot, ai, ctx, L) {
   const r = bfs(bot, board, c, now, ms, danger, null, mon, L.spare);
   // Спершу — бомба тут, якщо є що зачепити і куди втекти (інакше бот бігає туди-назад між «кращими» клітинками)
   const esc = canBomb && canEscape(bot, board, c, now, ms, danger, mon, L.spare, roomy);
-  if (esc && blastValue(board, c, bot.fp, ctx, true) + pressure(ctx, c, GW) > 0) {
+  if (esc && blastValue(board, c, bot.fp, ctx, foe) + (tame ? 0 : pressure(ctx, c, GW)) > 0) {
     ai.path = []; ai.goal = -1; ai.allyWait = 0;
     if (Math.random() < L.aggro) ai.bomb = true;                   // не наважився — вагається тут
     return;
@@ -162,7 +165,7 @@ function think(bot, ai, ctx, L) {
     }
     if (best >= 0) { ai.path = pathTo(r, best); ai.goal = -1; ai.allyWait = 0; return; }
   }
-  if (esc && ctx.coop && blastValue(board, c, bot.fp, { ...ctx, allies: [] }, true) > 0) {
+  if (esc && ctx.coop && blastValue(board, c, bot.fp, { ...ctx, allies: [] }, foe) > 0) {
     if (!ai.allyWait) ai.allyWait = now + ALLY_WAIT;
     if (now < ai.allyWait) { ai.path = []; return; }               // свій на лінії вогню — чекаємо, поки відійде
   }
@@ -174,9 +177,9 @@ function think(bot, ai, ctx, L) {
     if (d <= 0 || d > LOOK || ai.tabu.has(i) || !standOk(i, now + d * ms)) continue;
     let v = 0;
     const it = board.itemAt(i);
-    if (it) v += 5;
-    const bv = canBomb ? blastValue(board, i, bot.fp, ctx, d <= NEAR) : 0;
-    if (!ctx.coop && ctx.enemies.length) {                         // суперників трохи «тягне»
+    if (it && !tame) v += 5;
+    const bv = canBomb ? blastValue(board, i, bot.fp, ctx, d <= NEAR ? foe : 0) : 0;
+    if (!ctx.coop && !tame && ctx.enemies.length) {                // суперників трохи «тягне»
       let md = Infinity;
       for (const e of ctx.enemies) md = Math.min(md, Math.abs(Math.round(e.x) - i % GW) + Math.abs(Math.round(e.y) - Math.floor(i / GW)));
       v -= md * 0.12;
@@ -193,14 +196,15 @@ function think(bot, ai, ctx, L) {
     return;
   }
   ai.goal = -1; ai.allyWait = 0;
-  // Поруч нічого цікавого — туди, звідки найближче до блоків і суперників (у «Команді» — монстрів)
-  const goals = ctx.enemies.map(e => [Math.round(e.x), Math.round(e.y)]);
+  // Поруч нічого цікавого — туди, звідки найближче до блоків і суперників (у «Команді» — монстрів); tame — лише до блоків,
+  // а їх немає — навмання поблизу
+  const goals = tame ? [] : ctx.enemies.map(e => [Math.round(e.x), Math.round(e.y)]);
   for (let i = 0; i < board.cell.length; i++) if (board.cell[i] === BLOCK && !board.burn.has(i)) goals.push([i % GW, (i - i % GW) / GW]);
   let best = null, bestK = Infinity;
   for (const k of cand) {
     if (!k.d) continue;
     const x = k.i % GW, y = (k.i - x) / GW;
-    let md = Infinity;
+    let md = goals.length ? Infinity : 0;
     for (const [gx, gy] of goals) md = Math.min(md, Math.abs(gx - x) + Math.abs(gy - y));
     const key = md + k.d * 0.1 + Math.random() * 0.5;
     if (key < bestK) { bestK = key; best = k; }
@@ -257,21 +261,21 @@ function farFrom(list, i, GW) {
   return d;
 }
 
-// Цінність вибуху з клітинки i: блоки +1, суперники (монстри в «Команді») +4 — якщо foes, свої в «Команді» −8, бонус −1
+// Цінність вибуху з клітинки i: блоки +1, суперники (монстри в «Команді») +foes кожен, свої в «Команді» −8, бонус −1
 function blastValue(board, i, p, ctx, foes) {
   const GW = board.map.GW, x0 = i % GW, y0 = Math.floor(i / GW);
   let v = 0;
   const near = (list, x, y) => { let n = 0; for (const e of list) if (Math.round(e.x) === x && Math.round(e.y) === y) n++; return n; };
   const enemies = foes ? ctx.enemies : [];
-  v += near(enemies, x0, y0) * 4 - (ctx.coop ? near(ctx.allies, x0, y0) * 8 : 0);
+  v += near(enemies, x0, y0) * foes - (ctx.coop ? near(ctx.allies, x0, y0) * 8 : 0);
   for (let d = 1; d <= 4; d++) {
     for (let s = 1; s <= p; s++) {
       const x = x0 + DX[d] * s, y = y0 + DY[d] * s, j = y * GW + x, c = board.cell[j];
       if (c === PILLAR || c === WALL) break;
-      if (c === BLOCK) { if (!board.burn.has(j)) v += 1 + (ctx.diff ? near(enemies, x, y) * 4 : 0); break; }   // привид у блоці теж згорить
+      if (c === BLOCK) { if (!board.burn.has(j)) v += 1 + (ctx.diff ? near(enemies, x, y) * foes : 0); break; }   // привид у блоці теж згорить
       if (board.active.has(j)) break;
       if (board.itemAt(j)) { v -= 1; break; }
-      v += near(enemies, x, y) * 4;
+      v += near(enemies, x, y) * foes;
       if (ctx.coop) v -= near(ctx.allies, x, y) * 8;
     }
   }
@@ -289,7 +293,7 @@ function room(bot, board, i, t, ms, danger, mon, spare) {
 // Чи зачепить вибух із клітинки i когось зі своїх («Команда»)
 function hitsAlly(board, i, p, ctx) {
   const mine = { ...ctx, enemies: [] };
-  return ctx.coop && blastValue(board, i, p, mine, false) < blastValue(board, i, p, { ...mine, allies: [] }, false);
+  return ctx.coop && blastValue(board, i, p, mine, 0) < blastValue(board, i, p, { ...mine, allies: [] }, 0);
 }
 
 // Клітинки, куди дістане вогонь бомби з клітинки i дальністю p (з нею самою)
