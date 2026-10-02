@@ -232,3 +232,18 @@ test('«Команда»: двоє ботів у одній клітинці, к
   R.board.cell[R.board.idx(3, 1)] = BLOCK;
   assert.ok(firstBomb(R, 15000) > 0);
 }));
+
+test('«Один проти одного»: на «Легко» й «Нормально» бот помічає чужу бомбу не одразу, на «Важко» — одразу', () => withRandom(0.5, () => {
+  // бот стоїть у (5, 1) і думає лише через нову бомбу; поруч, у (6, 1), людина ставить бомбу
+  const run = (diff, ms) => {
+    const R = botRound(diff, 5, 1), bot = R.sl[1];
+    bot.ai = { next: Infinity, seen: 0, path: [], bomb: false, tx: 5, ty: 1, goal: -1, roam: false, allyWait: 0, tabu: new Map() };
+    R.board.addBomb({ o: 0, n: 1, x: 6, y: 1, t: 1000, p: 2 });
+    for (let t = 1050; t <= 1000 + ms; t += 50) hostStep(R, t, 0.05, noop);
+    return { moved: bot.x !== 5 || bot.y !== 1, alive: bot.a };
+  };
+  assert.equal(run(2, 300).moved, true);
+  assert.equal(run(1, 300).moved, false);
+  assert.equal(run(0, 1000).moved, false);
+  assert.deepEqual(run(0, FUSE_MS + 600), { moved: true, alive: true });   // помітив — утік (униз, у (5, 2))
+}));

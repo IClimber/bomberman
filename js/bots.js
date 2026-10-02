@@ -8,11 +8,13 @@ import { stepTo } from './monsters.js';
 
 // Складність: think — як часто думає (мс); slip — імовірність не помітити небезпеку цього разу;
 // aggro — імовірність поставити бомбу, коли є ціль; spare — запас часу на втечу (мс);
+// react — («Один проти одного») через скільки мс бот помічає чужу бомбу: без цього рівні там майже не відрізнялись —
+// усі тікали від вогню однаково досконало;
 // монстри («Нормально», «Важко», див. monsterReach): cross — запас (мс), з яким пройти клітинку раніше за монстра,
 // hold — скільки (мс) монстр не повинен устигнути дійти туди, де бот стоїть
 const LEVEL = [
-  { think: 450, slip: 0.3, aggro: 0.5, spare: 650 },
-  { think: 250, slip: 0.08, aggro: 0.8, spare: 400, cross: 200, hold: 700 },
+  { think: 450, slip: 0.3, aggro: 0.5, spare: 650, react: 1200 },
+  { think: 250, slip: 0.08, aggro: 0.8, spare: 400, react: 600, cross: 200, hold: 700 },
   { think: 120, slip: 0, aggro: 1, spare: 350, cross: 0, hold: 800 },
 ];
 const LOOK = 14;                     // ціль шукаємо не далі стількох кроків
@@ -36,6 +38,14 @@ export function botTick(bot, dt, ctx) {
   const ai = bot.ai || (bot.ai = { next: 0, seen: -1, path: [], bomb: false, tx: null, ty: null, goal: -1, roam: false, allyWait: 0, tabu: new Map() });
   if (ai.tx == null) { ai.tx = Math.round(bot.x); ai.ty = Math.round(bot.y); }
   const board = ctx.board, GW = board.map.GW;
+  // Реакція («Один проти одного», react): чужу бомбу бот помічає через react мс після того, як її поставили, —
+  // доти не тікає від неї й не зважає на неї, вибираючи шлях
+  let bombs = board.bombs.size;
+  if (L.react && !ctx.coop) {
+    const fresh = b => b.o !== bot.o && b.t + L.react > ctx.now;
+    for (const b of board.bombs.values()) if (fresh(b)) bombs--;
+    if (bombs < board.bombs.size) { let d = null; ctx = { ...ctx, danger: () => d || (d = board.danger(undefined, fresh)) }; }
+  }
   let dist = speedOf(bot.sp) * dt;
   bot.mv = false;
   // Рух за шляхом від центру до центру. Стоїть — думає раз на think мс; іде — в центрі клітинки (і посеред тіку), лише
@@ -44,12 +54,12 @@ export function botTick(bot, dt, ctx) {
   // одне в одного клітинку, розминались і так без кінця; якби думав у кожному центрі — перемикався б між цілями й тупцяв
   for (let g = 0; g < 4; g++) {
     if (bot.x === ai.tx && bot.y === ai.ty) {
-      if (board.bombs.size !== ai.seen && ai.path.length && pathOk(bot, ai, ctx, L)) ai.seen = board.bombs.size;
-      if (board.bombs.size !== ai.seen
+      if (bombs !== ai.seen && ai.path.length && pathOk(bot, ai, ctx, L)) ai.seen = bombs;
+      if (bombs !== ai.seen
         || ctx.now >= ai.next && (!ai.path.length || ctx.danger()[ai.ty * GW + ai.tx] !== Infinity
           || ai.roam && ctx.enemies.some(e => Math.abs(e.x - ai.tx) + Math.abs(e.y - ai.ty) <= NEAR))) {
         ai.next = ctx.now + L.think * (0.8 + Math.random() * 0.4);
-        ai.seen = board.bombs.size;
+        ai.seen = bombs;
         think(bot, ai, ctx, L);
       }
       if (ai.bomb) {

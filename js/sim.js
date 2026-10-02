@@ -435,13 +435,14 @@ export class Board {
   // й стінами) протягом horizon мс; Infinity — безпечно. Вогонь, що горить зараз, — fireAt/fireUntil: якби він теж ішов
   // сюди, наступний вибух у тій самій клітинці загубився б, і бот ішов би туди, «бо вже відгоріло». З тієї ж причини
   // d.last — коли в клітинці останній вибух (−Infinity — немає): пройти «після вогню» можна лише після нього. Рахується на копії поля.
-  danger(horizon = FUSE_MS + FLAME_MS) {
+  // skip(бомба) → true — без цієї бомби (бот її ще не помітив)
+  danger(horizon = FUSE_MS + FLAME_MS, skip = null) {
     const n = this.cell.length, d = new Float64Array(n).fill(Infinity), last = new Float64Array(n).fill(-Infinity);
     const c = Object.create(Board.prototype);
     Object.assign(c, this, {
       cell: Uint8Array.from(this.cell), item: Uint8Array.from(this.item), shown: Uint8Array.from(this.shown),
       fireUntil: Float64Array.from(this.fireUntil), burn: new Map(this.burn), flames: [], live: false,
-      active: new Map([...this.active].map(([i, a]) => [i, { ...a }])), queue: [], pickQ: [],
+      active: new Map([...this.active].filter(([, a]) => !skip || !skip(a.b)).map(([i, a]) => [i, { ...a }])), queue: [], pickQ: [],
     });
     c.hit = (i, t) => { if (t < d[i]) d[i] = t; if (t > last[i]) last[i] = t; };
     c.dropWall = (i) => { if (c.wallAt[i] < d[i]) d[i] = c.wallAt[i]; Board.prototype.dropWall.call(c, i); };
