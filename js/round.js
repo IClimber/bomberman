@@ -60,8 +60,10 @@ export function kill(R, o, t) {
 }
 
 // Крок хоста. ev: { bomb(b), pick(p), dead(o, t), monster(m) } — що розіслати. Повертає true, якщо щось змінилось.
+// Раунд скінчився, а живих людей немає (усі загинули, боти лишились) — боти й монстри грають далі, поки висить підсумок
+// (він уже не змінюється); інакше після кінця все стоїть.
 export function hostStep(R, now, dt, ev) {
-  if (R.p !== 0 || now < R.t0) return false;
+  if (now < R.t0 || (R.p !== 0 && R.sl.some(s => s.a && !s.b))) return false;
   const B = R.board;
   B.advance(now);
   let changed = false;

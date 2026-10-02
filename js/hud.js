@@ -110,7 +110,7 @@ function renderResult(R) {
   play.title = mine ? 'Натисни ще раз, щоб скасувати' : '';
   const who = need >= members ? 'щойно всі натиснуть «Грати»' : `щойно «Грати» натиснуть ${need}`;
   $('resNote').textContent = `Наступний раунд — ${who}.`;
-  const key = `${R.r}:${R.res}:${R.wn}`;
+  const key = `${R.r}:${R.res}:${R.wn}:${R.sl.map(s => +s.a).join('')}`;   // боти можуть грати й після кінця
   if (key === resKey) return;
   resKey = key;
   const w = R.sl[R.wn];

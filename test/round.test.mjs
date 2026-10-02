@@ -93,6 +93,31 @@ test('крок хоста: боти ставлять бомби, руйнуют�
   }
 });
 
+test('після кінця раунду: живих людей немає — боти грають далі, підсумок той самий; людина жива — усе стоїть', () => {
+  const R = newRound({ r: 1, seed: 77, m: MODE_VS, s: 0, d: 1, t0: 0, sl: people(1, 3) });
+  kill(R, 0, 100);
+  let t = 0, bombs = 0;
+  const ev = { ...noop, bomb() { bombs++; } };
+  while (R.p === 0) { t += 50; hostStep(R, t, 0.05, ev); }
+  assert.equal(R.res, RES_NOBODY);
+  const where = () => R.sl.map(s => `${s.x},${s.y}`).join(';');
+  const was = where();
+  bombs = 0;
+  for (let k = 0; k < 200; k++) { t += 50; hostStep(R, t, 0.05, ev); }
+  assert.ok(bombs > 0, `бомб: ${bombs}`);
+  assert.notEqual(where(), was);
+  assert.deepEqual([R.p, R.res], [1, RES_NOBODY]);
+
+  const Q = newRound({ r: 1, seed: 77, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1, 1) });
+  for (const m of Q.mons) m.a = false;
+  t = 0;
+  while (Q.p === 0) { t += 50; hostStep(Q, t, 0.05, noop); }
+  assert.equal(Q.res, RES_TEAM_WIN);
+  const bot = Q.sl[1], at = [bot.x, bot.y];
+  for (let k = 0; k < 100; k++) { t += 50; assert.equal(hostStep(Q, t, 0.05, noop), false); }
+  assert.deepEqual([bot.x, bot.y], at);
+});
+
 // Порожня карта 13×11 (лише рамка і стовпи)
 function emptyMap() {
   const m = makeMap(1, 0);
