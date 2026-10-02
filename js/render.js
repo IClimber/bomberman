@@ -2,7 +2,7 @@
 // Як виглядає кожна річ — у стилі графіки (skins/*.js); тут — розкладка, кеш, порядок шарів, анімації смерті.
 // Розмір клітинки — від вікна й карти (уся карта на екрані), з урахуванням devicePixelRatio.
 // Статичний шар (тло, підлога, стовпи, рамка) і спрайти клітинок кешуються під поточний розмір і стиль.
-import { PILLAR, BLOCK, WALL, FUSE_MS, FLAME_MS, ROLL_MS } from './sim.js';
+import { PILLAR, BLOCK, WALL, FUSE_MS, FLAME_MS } from './sim.js';
 import { COLORS } from './state.js';
 import { SKINS } from './skins/index.js';
 import { TAU, makeCanvas, rnd, drawFlame, drawBurning, remoteMark } from './skins/common.js';
@@ -61,7 +61,7 @@ export function createRenderer(canvas) {
       seed: map.seed,
       blocks: Array.from({ length: sk.blocks || 1 }, (_, v) => sprite(ts, (s) => sk.block(s, ts, v))),
       wall: sprite(ts, (s) => sk.wall(s, ts)),
-      items: [null, 1, 2, 3, 4, 5, 6, 7].map(k => k && sprite(ts, (s) => sk.item(s, k, ts))),
+      items: [null, 1, 2, 3, 4, 5, 6].map(k => k && sprite(ts, (s) => sk.item(s, k, ts))),
     };
   }
   // Блок клітинки i — один з варіантів стилю (сталий для клітинки в межах карти)
@@ -140,12 +140,9 @@ export function createRenderer(canvas) {
       }
     }
 
-    // бомби: що котиться — між клітинками; з детонатором — без запалу (k = 0), з антенкою, доки не підірвали
+    // бомби; з детонатором — без запалу (k = 0), з антенкою, доки не підірвали
     for (const a of B.active.values()) {
-      const m = a.from === a.i ? 1 : Math.max(0, Math.min(1, 1 - (a.at - T) / ROLL_MS));
-      const fx = a.from % GW, fy = (a.from - fx) / GW, ix = a.i % GW, iy = (a.i - ix) / GW;
-      const x = (fx + (ix - fx) * m) * ts, y = (fy + (iy - fy) * m) * ts;
-      const remote = a.te === Infinity;
+      const x = a.b.x * ts, y = a.b.y * ts, remote = a.te === Infinity;
       sk.bomb(ctx, x, y, ts, remote ? 0 : Math.max(0, Math.min(1, 1 - (a.te - T) / FUSE_MS)), T);
       if (remote) remoteMark(ctx, x, y, ts, T);
     }

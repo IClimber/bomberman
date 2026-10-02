@@ -143,7 +143,7 @@ export function sendWorld(to) {
     r: R.r, p: R.p, m: R.m, s: R.s, d: R.d, t0: R.t0, ts, k: R.res, wn: R.wn, en: dg.n, eh: dg.h,
     sl: R.sl.map(s => ({
       i: s.i, b: s.b, c: s.c, n: s.n, a: s.a, kb: s.kb, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv,
-      nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs, kk: s.kk, rc: s.rc,
+      nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs, rc: s.rc,
     })),
     mo: R.mons.map(m => ({ i: m.i, k: m.k, x: q8(m.x), y: q8(m.y), dr: m.d || 0, a: m.a, kb: m.kb })),
     g: R.board.snapshot(),
@@ -155,7 +155,7 @@ export function sendWorld(to) {
 export function sendEvents(to) {
   const R = S.R, B = R.board;
   net.send('evs', {
-    r: R.r, bo: [...B.bombs.values()], pk: [...B.picks.values()], kk: [...B.kicks.values()], dt: [...B.dets.values()],
+    r: R.r, bo: [...B.bombs.values()], pk: [...B.picks.values()], dt: [...B.dets.values()],
     dd: R.sl.filter(s => !s.a).map(s => ({ o: s.o, t: s.dt, k: s.kb })),
   }, to);
 }

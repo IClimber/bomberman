@@ -1,11 +1,10 @@
 // round.js — раунд без DOM і мережі: слоти, поле, монстри; крок хоста (боти, монстри, смерті, кінець раунду).
 // Слот { o (номер 0–3, місце старту), i (id людини; '' — бот), b (бот), c (колір), n (ім'я), a (живий), dt (коли загинув),
 //   kb (хто вбив, див. KB_*), x, y, dr (напрям), mv (іде), nb (бомб), fp (дальність вогню), sp (бонусів швидкості),
-//   ps (прохід крізь бомби), rs (стійкий до вогню до, спільний час), kk (штурхає бомби), rc (детонатор),
-//   bn (лічильник своїх бомб) }
+//   ps (прохід крізь бомби), rs (стійкий до вогню до, спільний час), rc (детонатор), bn (лічильник своїх бомб) }
 import {
   makeMap, Board, MON, WALL, RESIST_MS, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS, FUSE_MS,
-  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE, DX, DY, cellOf,
+  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE, DX, DY, cellOf,
 } from './sim.js';
 import { monsterStep } from './monsters.js';
 import { botTick, botCanPlace, botDetonate } from './bots.js';
@@ -34,7 +33,7 @@ export function newRound({ r, seed, m, s, d, t0, sl }) {
     const [x, y] = map.spawns[k];
     return {
       o: k, i: e.i, b: !!e.b, c: e.c, n: e.n, a: true, dt: 0, kb: KB_NONE, x, y, dr: 3, mv: false,
-      nb: START_BOMBS, fp: START_FIRE, sp: 0, ps: false, rs: 0, kk: false, rc: false, bn: 0,
+      nb: START_BOMBS, fp: START_FIRE, sp: 0, ps: false, rs: 0, rc: false, bn: 0,
     };
   });
   const mons = map.mons.map(mo => ({ i: mo.i, k: mo.k, x: mo.x, y: mo.y, d: 0, a: true, dt: 0, kb: KB_NONE }));
@@ -47,7 +46,6 @@ export function applyItem(s, kind, now) {
   else if (kind === IT_SPEED) s.sp = Math.min(MAX_SPEED_UPS, s.sp + 1);
   else if (kind === IT_PASS) s.ps = true;
   else if (kind === IT_RESIST) s.rs = now + RESIST_MS;
-  else if (kind === IT_KICK) s.kk = true;
   else if (kind === IT_REMOTE) s.rc = true;
 }
 

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   makeMap, Board, moveActor, spiral, suddenDeath, canPlace, mulberry32,
-  EMPTY, PILLAR, BLOCK, WALL, FUSE_MS, FLAME_MS, ROLL_MS, REMOTE_ESCAPE, SIZES,
+  EMPTY, PILLAR, BLOCK, WALL, FUSE_MS, FLAME_MS, REMOTE_ESCAPE, SIZES,
 } from '../js/sim.js';
 
 // Порожня карта 13×11 (лише рамка і стовпи) — щоб вибухи було легко передбачити
@@ -269,12 +269,12 @@ test('детермінізм: багато подій у випадковому 
       const x = 1 + Math.floor(rnd() * m.w), y = 1 + Math.floor(rnd() * m.h);
       evs.push({ kind: 'p', e: { o: k % 4, x, y, t: Math.floor(rnd() * 40000) } });
     }
-    for (let k = 0; k < 30; k++) {                                // штурхання (частина — у порожнечу) і детонатор
-      const b = evs[Math.floor(rnd() * 20)].e, t = b.t + Math.floor(rnd() * 3000);
-      if (k % 2) evs.push({ kind: 'k', e: { o: k % 4, x: b.x, y: b.y, d: 1 + Math.floor(rnd() * 4), t } });
-      else { b.rc = true; evs.push({ kind: 'd', e: { o: b.o, n: b.n, b: b.t, t } }); }
+    for (let k = 0; k < 15; k++) {                                // детонатор
+      const b = evs[Math.floor(rnd() * 20)].e;
+      b.rc = true;
+      evs.push({ kind: 'd', e: { o: b.o, n: b.n, b: b.t, t: b.t + Math.floor(rnd() * 3000) } });
     }
-    const add = (bd, ev) => ev.kind === 'b' ? bd.addBomb(ev.e) : ev.kind === 'p' ? bd.addPick(ev.e) : ev.kind === 'k' ? bd.addKick(ev.e) : bd.addDet(ev.e);
+    const add = (bd, ev) => ev.kind === 'b' ? bd.addBomb(ev.e) : ev.kind === 'p' ? bd.addPick(ev.e) : bd.addDet(ev.e);
     const ref = new Board(m, 0);
     for (const ev of [...evs].sort((a, b) => a.e.t - b.e.t)) { ref.advance(ev.e.t - 1); add(ref, ev); }
     ref.advance(60000);
@@ -304,56 +304,6 @@ test('бомби з тим самим номером, але різним час
   b.advance(500);
   assert.equal(b.active.size, 1);
   assert.equal(b.digest(1000).n, 1);
-});
-
-test('штурхання: бомба котиться клітинка за ROLL_MS, доки попереду вільно; вибух — де зупинилась', () => {
-  const m = emptyMap();
-  const b = new Board(m, 0);
-  b.addBomb({ o: 0, n: 1, x: 3, y: 1, t: 0, p: 2 });
-  b.addKick({ o: 1, x: 3, y: 1, d: 2, t: 500 });
-  b.advance(500);
-  assert.ok(b.bombAt(at(m, 4, 1)) && !b.bombAt(at(m, 3, 1)));   // одразу займає наступну клітинку
-  b.advance(500 + 5 * ROLL_MS);
-  assert.ok(b.bombAt(at(m, 9, 1)));
-  b.advance(2000);
-  const a = b.active.get(at(m, 13, 1));                         // уперлась у рамку
-  assert.ok(a && a.d === 0 && a.from === a.i);
-  b.addKick({ o: 1, x: 13, y: 1, d: 2, t: 2100 });              // у стіну — нікуди
-  b.advance(2200);
-  assert.ok(b.bombAt(at(m, 13, 1)));
-  b.advance(FUSE_MS);
-  assert.ok(b.fireAt(at(m, 11, 1)) && b.fireAt(at(m, 13, 3)) && !b.fireAt(at(m, 3, 1)));
-  assert.equal(b.fireBy(at(m, 12, 1)), 0);                      // вогонь — власника бомби, не того, хто штурхнув
-});
-
-test('штурхання: зупиняють блок, бонус, інша бомба; штурхнути можна лише бомбу, що стоїть; у вогонь — вибух', () => {
-  const m = emptyMap();
-  m.cell[at(m, 7, 1)] = BLOCK;
-  m.item[at(m, 1, 7)] = 2;
-  const b = new Board(m, 0);
-  b.base.shown[at(m, 1, 7)] = 1;                                // бонус, що вже видно
-  b.reset();
-  b.addBomb({ o: 0, n: 1, x: 3, y: 1, t: 0, p: 1 });
-  b.addBomb({ o: 0, n: 2, x: 1, y: 3, t: 0, p: 1 });
-  b.addBomb({ o: 1, n: 1, x: 9, y: 3, t: 0, p: 1 });
-  b.addBomb({ o: 1, n: 2, x: 4, y: 3, t: 0, p: 1 });
-  b.addKick({ o: 1, x: 3, y: 1, d: 2, t: 100 });
-  b.addKick({ o: 1, x: 4, y: 1, d: 4, t: 150 });                // уже котиться — не зважаємо
-  b.addKick({ o: 1, x: 4, y: 3, d: 2, t: 100 });
-  b.addKick({ o: 1, x: 1, y: 3, d: 3, t: 100 });
-  b.addKick({ o: 1, x: 5, y: 5, d: 2, t: 100 });                // там немає бомби
-  b.advance(1200);
-  assert.ok(b.bombAt(at(m, 6, 1)));                             // перед блоком
-  assert.ok(b.bombAt(at(m, 8, 3)));                             // перед іншою бомбою
-  assert.ok(b.bombAt(at(m, 1, 6)));                             // перед бонусом
-  assert.equal(b.active.size, 4);
-  const roll = new Board(m, 0);                                 // у клітинку, що горить, — вибух одразу
-  roll.addBomb({ o: 0, n: 1, x: 5, y: 1, t: 0, p: 1 });
-  roll.addBomb({ o: 1, n: 1, x: 9, y: 1, t: 200, p: 1 });
-  roll.addKick({ o: 2, x: 9, y: 1, d: 4, t: FUSE_MS + 50 });     // (6, 1) горить до 3000
-  roll.advance(FUSE_MS + 50 + 3 * ROLL_MS);
-  assert.equal(roll.active.size, 0);
-  assert.ok(roll.fireAt(at(m, 7, 1)) && roll.fireBy(at(m, 7, 1)) === 1);
 });
 
 test('детонатор: бомба не вибухає сама, лише від підриву (зокрема майбутнього) чи чужого вогню', () => {
@@ -403,13 +353,12 @@ test('небезпека й детонатор: для ботів — будь-�
   assert.equal(b.active.size, 1);
 });
 
-test('знімок для глядача: бомба, що котиться, і бомба з детонатором', () => {
+test('знімок для глядача: бомба з детонатором', () => {
   const m = emptyMap();
   const host = new Board(m, 0);
   host.addBomb({ o: 0, n: 1, x: 1, y: 1, t: 0, p: 2 });
   host.addBomb({ o: 1, n: 1, x: 1, y: 5, t: 0, p: 1, rc: true });
-  host.addKick({ o: 2, x: 1, y: 1, d: 2, t: 300 });
-  host.advance(300 + 2.5 * ROLL_MS);
+  host.advance(1000);
   const late = new Board(m, 0);
   assert.ok(late.setBase(host.snapshot(), host.activeList(), host.T));
   const e = { o: 1, n: 1, b: 0, t: 5000 };

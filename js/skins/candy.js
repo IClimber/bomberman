@@ -2,9 +2,9 @@
 // шоколад з білою глазур'ю; блоки — предмети з тінню: капкейки, желейні кубики, льодяники; стіни — карамельні палички
 // в смужку. Гравці — імбирні чоловічки з гудзиками й шарфиком кольору гравця; желейний ведмедик, оса, привид-маршмелоу.
 // Бомби — круглі цукерки з ґнотом. Бонуси: 🍬 бомба, 🔥 вогонь, ⚡ швидкість, 👻 прохід, 🛡️ стійкість,
-// 👟 штурхання, 📡 детонатор.
-import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE } from '../sim.js';
-import { TAU, rr, rnd, luma, shade, rgba, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, spark, flameShape, kickIcon, remoteIcon, ghostPath } from './common.js';
+// 📡 детонатор.
+import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
+import { TAU, rr, rnd, luma, shade, rgba, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, spark, flameShape, remoteIcon, ghostPath } from './common.js';
 
 const ICE = '#ffe3ec', ICE2 = '#ffdbe6', CHOC = '#5b3420', CHOC_HI = '#7a4a2e', CHOC_LO = '#3a1f10';
 const COOKIE = '#c98a4a', ICING = '#fffaf2';
@@ -100,7 +100,7 @@ function wall(g, s) {
 }
 
 // Бонуси на круглому печиві з глазур'ю
-const ITEM_BG = { [IT_BOMB]: '#7ec8ff', [IT_FIRE]: '#ffb07e', [IT_SPEED]: '#fff07e', [IT_PASS]: '#d6b8ff', [IT_RESIST]: '#9ef0b0', [IT_KICK]: '#ff9ec7', [IT_REMOTE]: '#b8f0ff' };
+const ITEM_BG = { [IT_BOMB]: '#7ec8ff', [IT_FIRE]: '#ffb07e', [IT_SPEED]: '#fff07e', [IT_PASS]: '#d6b8ff', [IT_RESIST]: '#9ef0b0', [IT_REMOTE]: '#b8f0ff' };
 function item(g, k, s) {
   const cx = s / 2, cy = s / 2;
   circle(g, cx + s * 0.02, cy + s * 0.04, s * 0.4, 'rgba(120,40,70,0.25)');
@@ -124,8 +124,7 @@ function item(g, k, s) {
     g.quadraticCurveTo(cx - s * 0.18, cy + s * 0.14, cx - s * 0.2, cy - s * 0.15); g.closePath(); g.fill();
     g.fillStyle = '#ff4d8d'; g.beginPath(); g.arc(cx - s * 0.05, cy - s * 0.02, s * 0.06, 0, TAU); g.arc(cx + s * 0.05, cy - s * 0.02, s * 0.06, 0, TAU); g.fill();
     poly(g, [[cx - s * 0.11, cy], [cx + s * 0.11, cy], [cx, cy + s * 0.13]], '#ff4d8d');
-  } else if (k === IT_KICK) kickIcon(g, cx, cy, s * 0.95, '#fff', '#ff4d8d', '#7a1a3a');
-  else if (k === IT_REMOTE) remoteIcon(g, cx, cy, s * 0.95, '#ff4d8d', '#fff', '#7a1a3a');
+  } else if (k === IT_REMOTE) remoteIcon(g, cx, cy, s * 0.95, '#ff4d8d', '#fff', '#7a1a3a');
 }
 
 // Цукерка-бомба: кругла, з білими смужками й ґнотом
@@ -218,7 +217,7 @@ export default {
   bg: '#ffc2d6',
   backdrop,
   shadow: 'rgba(120,40,80,0.35)',
-  emoji: { bomb: '🍬', fire: '🔥', speed: '⚡', pass: '👻', resist: '🛡️', kick: '👟', remote: '📡' },
+  emoji: { bomb: '🍬', fire: '🔥', speed: '⚡', pass: '👻', resist: '🛡️', remote: '📡' },
   fire: ['#ff4d8d', '#ffa64d', '#fff2b3'],
   burn: ['#ff4d8d', 'rgba(255,220,120,0)'],
   blocks: 3,

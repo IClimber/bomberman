@@ -184,27 +184,6 @@ export function ghostPath(g, s, wob, w = 0.3) {
   g.closePath();
 }
 
-// Бонус «штурхання»: черевик носком праворуч і бомбочка перед ним (boot — черевик, sole — підошва, ball — бомбочка)
-export function bootPath(g, cx, cy, s) {
-  g.beginPath();
-  g.moveTo(cx - s * 0.3, cy - s * 0.26);
-  g.lineTo(cx - s * 0.1, cy - s * 0.26);
-  g.lineTo(cx - s * 0.1, cy - s * 0.03);
-  g.quadraticCurveTo(cx + s * 0.07, cy - s * 0.03, cx + s * 0.1, cy + s * 0.1);
-  g.lineTo(cx + s * 0.1, cy + s * 0.18);
-  g.lineTo(cx - s * 0.3, cy + s * 0.18);
-  g.closePath();
-}
-export function kickIcon(g, cx, cy, s, boot = '#f4f4f4', sole = '#3a2a1a', ball = '#1c1f2a') {
-  bootPath(g, cx, cy, s);
-  g.fillStyle = boot; g.fill();
-  g.fillStyle = sole; g.fillRect(cx - s * 0.3, cy + s * 0.13, s * 0.4, s * 0.07);
-  g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(cx - s * 0.3, cy - s * 0.26, s * 0.2, s * 0.05);
-  circle(g, cx + s * 0.22, cy + s * 0.09, s * 0.1, ball);
-  circle(g, cx + s * 0.19, cy + s * 0.06, s * 0.03, 'rgba(255,255,255,0.6)');
-  line(g, cx + s * 0.2, cy - s * 0.12, cx + s * 0.3, cy - s * 0.2, s * 0.03, boot);          // «удар»
-  line(g, cx + s * 0.27, cy - s * 0.04, cx + s * 0.36, cy - s * 0.08, s * 0.03, boot);
-}
 // Бонус «детонатор»: пульт з антеною, червона кнопка, хвилі (box — корпус, btn — кнопка, wave — антена й хвилі)
 export function remotePath(g, cx, cy, s) { rr(g, cx - s * 0.17, cy - s * 0.04, s * 0.32, s * 0.3, s * 0.05); }
 export function remoteIcon(g, cx, cy, s, box = '#3a4256', btn = '#e53935', wave = '#ffd23f') {

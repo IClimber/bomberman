@@ -2,9 +2,9 @@
 // піраміди з золотою смугою; блоки — предмети з тінню: амфори, плетені кошики, скрині із золотом; стіни — білий вапняк.
 // Гравці — фараони в немесі кольору гравця із золотом; мумія, скарабей, дух-ка. Бомби — чорні з золотим скарабеєм.
 // Тло — піраміди й дюни вночі. Бонуси: 💣 бомба, ☀️ вогонь (диск Ра), 🐪 швидкість, 👁️ прохід (око Гора),
-// 🪲 стійкість (скарабей), 👡 штурхання (сандалія), 🗝️ детонатор (анх).
-import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE } from '../sim.js';
-import { TAU, rr, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, spark, kickIcon, ghostPath } from './common.js';
+// 🪲 стійкість (скарабей), 🗝️ детонатор (анх).
+import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
+import { TAU, rr, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, spark, ghostPath } from './common.js';
 
 const SAND = '#e6c992', SAND2 = '#e0c18a', STONE = '#9b7448', STONE_HI = '#b88d5a', STONE_LO = '#6e5030';
 const GOLD = '#e8b923', GOLD_D = '#a87c10', LAPIS = '#1f4fa8', SKIN = '#c98a52', INK = '#3a2614';
@@ -141,7 +141,6 @@ function item(g, k, s) {
     g.beginPath(); g.moveTo(cx - s * 0.24, cy - s * 0.12); g.quadraticCurveTo(cx, cy - s * 0.24, cx + s * 0.26, cy - s * 0.12); g.stroke();
     g.beginPath(); g.moveTo(cx - s * 0.04, cy + s * 0.08); g.lineTo(cx - s * 0.06, cy + s * 0.24); g.moveTo(cx + s * 0.06, cy + s * 0.08); g.quadraticCurveTo(cx + s * 0.16, cy + s * 0.26, cx + s * 0.22, cy + s * 0.16); g.stroke();
   } else if (k === IT_RESIST) scarab(g, cx, cy + s * 0.02, s * 0.85, 0, '#2fa58a');
-  else if (k === IT_KICK) kickIcon(g, cx, cy, s, '#c9a25a', GOLD_D, '#1a1a1a');
   else if (k === IT_REMOTE) {                                        // анх
     g.strokeStyle = GOLD; g.lineWidth = s * 0.07; g.lineCap = 'round';
     g.beginPath(); g.ellipse(cx, cy - s * 0.13, s * 0.08, s * 0.1, 0, 0, TAU);
@@ -268,7 +267,7 @@ export default {
   bg: '#241a2e',
   backdrop,
   shadow: 'rgba(20,10,0,0.6)',
-  emoji: { bomb: '💣', fire: '☀️', speed: '🐪', pass: '👁️', resist: '🪲', kick: '👡', remote: '🗝️' },
+  emoji: { bomb: '💣', fire: '☀️', speed: '🐪', pass: '👁️', resist: '🪲', remote: '🗝️' },
   fire: ['#e8611c', '#ffc23d', '#fff4c4'],
   burn: ['#ff6a00', 'rgba(255,220,80,0)'],
   blocks: 3,

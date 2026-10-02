@@ -69,7 +69,6 @@ export const sfx = {
     tone(90, 38, 0.45, 'sine', 0.5);
   },
   pick() { if (ready()) [660, 880, 1320].forEach((f, k) => tone(f, f, 0.07, 'triangle', 0.16, k * 0.06)); },
-  kick() { if (ready()) { tone(140, 70, 0.08, 'square', 0.14); noise(0.12, 0.25, 900, 200); } },
   death() { if (ready()) tone(560, 90, 0.7, 'sawtooth', 0.14); },
   monster() { if (ready()) tone(260, 900, 0.14, 'triangle', 0.14); },
   win() { if (ready()) [523, 659, 784, 1046].forEach((f, k) => tone(f, f, k === 3 ? 0.4 : 0.13, 'square', 0.11, k * 0.13)); },

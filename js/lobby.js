@@ -103,8 +103,7 @@ export function renderLobby() {
   const e = skinOf().emoji;
   $('helpBomb').textContent = e.bomb;
   $('helpItems').textContent = `${e.bomb} +1 бомба, ${e.fire} +1 до дальності, ${e.speed} швидкість, ${e.pass} прохід крізь бомби, `
-    + `${e.resist} 10 с стійкості до вогню, ${e.kick} штурхання бомб (іди на бомбу — покотиться), `
-    + `${e.remote} детонатор (бомби вибухають, коли натиснеш E / Enter; загинув — за 2,5 с)`;
+    + `${e.resist} 10 с стійкості до вогню, ${e.remote} детонатор (бомби вибухають, коли натиснеш E / Enter; загинув — за 2,5 с)`;
   const forced = botsForced();
   $('bots').checked = room.b || forced;
   $('bots').disabled = forced;

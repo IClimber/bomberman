@@ -3,9 +3,9 @@
 // стіни — іржаві листи корабельного корпусу. Гравці — водолази в мідних шоломах, костюм кольору гравця;
 // восьминіг, мурена, риба-вудильник. Бомби — морські міни. Вогонь — кипляча вода.
 // Тло — глибина з променями світла й бульбашками. Бонуси: 💣 бомба, 🔱 вогонь, 🐬 швидкість, 🌊 прохід,
-// 🐢 стійкість (панцир), 👟 штурхання (ласт), 📡 детонатор.
-import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE } from '../sim.js';
-import { TAU, rr, rnd, luma, shade, rgba, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, kickIcon, remoteIcon } from './common.js';
+// 🐢 стійкість (панцир), 📡 детонатор.
+import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
+import { TAU, rr, rnd, luma, shade, rgba, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, remoteIcon } from './common.js';
 
 const SAND = '#d9c896', SAND2 = '#d3c18e', ROCK = '#4f5f66', ROCK_HI = '#6b7c84', ROCK_LO = '#33403f';
 const BRASS = '#c8913a', BRASS_HI = '#f0c060', WOOD = '#7a5030', SEA = '#0e4f6e';
@@ -121,7 +121,7 @@ function wall(g, s) {
 }
 
 // Бонуси в бульбашці
-const ITEM_BG = { [IT_BOMB]: '#ff8a7a', [IT_FIRE]: '#ff7a5a', [IT_SPEED]: '#7ae0ff', [IT_PASS]: '#9ad8ff', [IT_RESIST]: '#8ef0a8', [IT_KICK]: '#ffb3e0', [IT_REMOTE]: '#d0b8ff' };
+const ITEM_BG = { [IT_BOMB]: '#ff8a7a', [IT_FIRE]: '#ff7a5a', [IT_SPEED]: '#7ae0ff', [IT_PASS]: '#9ad8ff', [IT_RESIST]: '#8ef0a8', [IT_REMOTE]: '#d0b8ff' };
 function item(g, k, s) {
   const cx = s / 2, cy = s / 2;
   circle(g, cx, cy, s * 0.4, rgba(ITEM_BG[k], 0.55));
@@ -155,8 +155,7 @@ function item(g, k, s) {
     ellipse(g, cx, cy, s * 0.2, s * 0.17, '#3f7a3a');
     g.strokeStyle = '#8fd07a'; g.lineWidth = Math.max(1, s * 0.02);
     g.beginPath(); g.moveTo(cx - s * 0.08, cy - s * 0.05); g.lineTo(cx + s * 0.08, cy - s * 0.05); g.lineTo(cx + s * 0.1, cy + s * 0.05); g.lineTo(cx - s * 0.1, cy + s * 0.05); g.closePath(); g.stroke();
-  } else if (k === IT_KICK) kickIcon(g, cx, cy, s * 0.95, '#ffd23f', '#1a4a6a', '#2a3a44');
-  else if (k === IT_REMOTE) remoteIcon(g, cx, cy, s * 0.95, '#2a3a44', '#ff3b30', '#ffd23f');
+  } else if (k === IT_REMOTE) remoteIcon(g, cx, cy, s * 0.95, '#2a3a44', '#ff3b30', '#ffd23f');
 }
 
 // Морська міна: куля з рогами й вогником, що частішає до вибуху
@@ -264,7 +263,7 @@ export default {
   bg: '#041c2c',
   backdrop,
   shadow: 'rgba(0,10,20,0.6)',
-  emoji: { bomb: '💣', fire: '🔱', speed: '🐬', pass: '🌊', resist: '🐢', kick: '👟', remote: '📡' },
+  emoji: { bomb: '💣', fire: '🔱', speed: '🐬', pass: '🌊', resist: '🐢', remote: '📡' },
   fire: ['#1fa2d6', '#8ff0ff', '#ffffff'],
   burn: ['#3fd0ff', 'rgba(220,250,255,0)'],
   blocks: 3,

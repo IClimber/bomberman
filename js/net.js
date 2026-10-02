@@ -3,7 +3,7 @@
 // Стан кімнати й раунду авторитетний у хоста (див. host.js); рух, бомби, смерть і підбір — у власника.
 import { createNet } from 'https://iclimber.github.io/p2p-net/v1/net.js';
 import { S, ID_RE, COLORS, EMOJI, cleanName, uq8 } from './state.js';
-import { SIZES, FUSE_MS, bombKey, pickKey, kickKey, detKey } from './sim.js';
+import { SIZES, FUSE_MS, bombKey, pickKey, detKey } from './sim.js';
 import { SKINS } from './skins/index.js';
 import { newRound, kill, MODE_VS, KB_NONE } from './round.js';
 import * as host from './host.js';
@@ -17,13 +17,12 @@ const SYNC_EVERY = 2000;             // просити в хоста списо�
 // Колбеки для інтерфейсу (заповнює main.js)
 export const hooks = {
   room() {}, round() {}, hud() {}, warn() {},
-  blast() {}, death() {}, pickup() {}, bomb() {}, emo() {}, kick() {},
+  blast() {}, death() {}, pickup() {}, bomb() {}, emo() {},
 };
 export const EMO_GAP = 400;          // реакції від одного гравця — не частіше (мс)
 
-const SLOT = { i: 'str', b: 'bool', c: 'u8', n: 'str', a: 'bool', kb: 'u8', x: 'u16', y: 'u16', dr: 'u8', mv: 'bool', nb: 'u8', fp: 'u8', sp: 'u8', ps: 'bool', rs: 'f64', kk: 'bool', rc: 'bool' };
+const SLOT = { i: 'str', b: 'bool', c: 'u8', n: 'str', a: 'bool', kb: 'u8', x: 'u16', y: 'u16', dr: 'u8', mv: 'bool', nb: 'u8', fp: 'u8', sp: 'u8', ps: 'bool', rs: 'f64', rc: 'bool' };
 const BOMB = { o: 'u8', n: 'u16', x: 'u8', y: 'u8', t: 'f64', p: 'u8', rc: 'bool' };
-const KICK = { o: 'u8', x: 'u8', y: 'u8', d: 'u8', t: 'f64' };
 const DET = { o: 'u8', n: 'u16', b: 'f64', t: 'f64' };
 
 export const net = createNet({
@@ -49,19 +48,18 @@ export const net = createNet({
         sl: [SLOT],
         mo: [{ i: 'u16', k: 'u8', x: 'u16', y: 'u16', dr: 'u8', a: 'bool', kb: 'u8' }],
         g: 'bytes',
-        bo: [{ ...BOMB, cx: 'u8', cy: 'u8', d: 'u8', at: 'f64' }],          // де бомба зараз, куди котиться, коли там буде
+        bo: [BOMB],
         en: 'u16', eh: 'u32',                                         // контрольна сума подій з часом ≤ ts − SYNC_LAG
       },
     },
     // Учасник пропустив події (зв'язок рвався, сторінку заморожено): звіряємося з хостом
     sync: { schema: { r: 'f64' } },                                   // → хост: надішли всі події раунду
-    evs: { schema: { r: 'f64', bo: [BOMB], pk: [{ o: 'u8', x: 'u8', y: 'u8', t: 'f64' }], kk: [KICK], dt: [DET], dd: [{ o: 'u8', t: 'f64', k: 'u8' }] } },
+    evs: { schema: { r: 'f64', bo: [BOMB], pk: [{ o: 'u8', x: 'u8', y: 'u8', t: 'f64' }], dt: [DET], dd: [{ o: 'u8', t: 'f64', k: 'u8' }] } },
     // власна поза кожного учасника раунду (~20 Гц): координати, напрям, рух, бонуси
-    pos: { broadcast: true, unreliable: true, schema: { r: 'f64', x: 'u16', y: 'u16', dr: 'u8', mv: 'bool', nb: 'u8', fp: 'u8', sp: 'u8', ps: 'bool', rs: 'bool', kk: 'bool', rc: 'bool' } },
+    pos: { broadcast: true, unreliable: true, schema: { r: 'f64', x: 'u16', y: 'u16', dr: 'u8', mv: 'bool', nb: 'u8', fp: 'u8', sp: 'u8', ps: 'bool', rs: 'bool', rc: 'bool' } },
     bomb: { broadcast: true, schema: { r: 'f64', ...BOMB } },          // поставив власник (бота — хост)
     dead: { broadcast: true, schema: { r: 'f64', o: 'u8', t: 'f64', k: 'u8' } },   // загинув (вирішує сам; бота — хост); k — хто вбив (KB_*)
     pick: { broadcast: true, schema: { r: 'f64', o: 'u8', x: 'u8', y: 'u8', t: 'f64' } },   // підібрав бонус
-    kick: { broadcast: true, schema: { r: 'f64', ...KICK } },          // штурхнув бомбу в клітинці (x, y) у напрямі d
     det: { broadcast: true, schema: { r: 'f64', ...DET } },            // підірвав детонатором (за загиблого чи того, хто вийшов, — хост)
     emo: { broadcast: true, schema: { e: 'u8' } },                   // реакція (індекс EMOJI у state.js)
   },
@@ -110,7 +108,7 @@ function parseWorld(d) {
     s.n = cleanName(s.n);
   }
   for (const m of d.mo) if (m.k > 2 || m.dr > 4) return null;
-  for (const b of d.bo) if (b.d > 4 || b.p < 1 || b.p > 16) return null;
+  for (const b of d.bo) if (b.p < 1 || b.p > 16) return null;
   return d;
 }
 const seedOf = (r) => hashRoom(S.roomId + ':' + r);
@@ -128,7 +126,6 @@ function slotOk(R, o, from) {
   return !!s && (s.b || s.i === from);
 }
 const inField = (R, x, y) => x >= 1 && y >= 1 && x <= R.map.w && y <= R.map.h;
-const kickOk = (R, k) => !!R.sl[k.o] && inField(R, k.x, k.y) && k.d >= 1 && k.d <= 4;
 
 // ---------- Обробники ----------
 const ON = {
@@ -165,7 +162,7 @@ const ON = {
     const s = R.sl.find(e => !e.b && e.i === id);
     if (!s || !s.a) return;
     s.x = p.x; s.y = p.y; s.dr = d.dr; s.mv = d.mv;
-    s.nb = d.nb; s.fp = d.fp; s.sp = d.sp; s.ps = d.ps; s.rsOn = d.rs; s.kk = d.kk; s.rc = d.rc;
+    s.nb = d.nb; s.fp = d.fp; s.sp = d.sp; s.ps = d.ps; s.rsOn = d.rs; s.rc = d.rc;
   },
   bomb(d, id) {
     const R = S.R;
@@ -182,11 +179,6 @@ const ON = {
     if (!R || d.r !== R.r || !slotOk(R, d.o, id) || !inField(R, d.x, d.y)) return;
     R.board.addPick(d);
   },
-  kick(d, id) {
-    const R = S.R;
-    if (!R || d.r !== R.r || !slotOk(R, d.o, id) || !kickOk(R, d)) return;
-    if (R.board.addKick(d)) hooks.kick(d);
-  },
   det(d, id) {                                                     // від власника бомби або від хоста (за загиблого)
     const R = S.R;
     if (!R || d.r !== R.r || !R.sl[d.o] || (!slotOk(R, d.o, id) && id !== net.hostId())) return;
@@ -202,22 +194,19 @@ const ON = {
   // Усі події раунду від хоста: додаємо, яких бракує (поле перерахується); свої, яких бракує хосту, — розсилаємо знову
   evs(d, id) {
     const R = S.R;
-    if (!R || d.r !== R.r || id !== net.hostId() || d.bo.length > 8000 || d.pk.length > 4000 || d.kk.length > 8000 || d.dt.length > 8000) return;
+    if (!R || d.r !== R.r || id !== net.hostId() || d.bo.length > 8000 || d.pk.length > 4000 || d.dt.length > 8000) return;
     const now = net.sharedNow();
     // події ботів — як у хоста: свої «бомби ботів» з часу, коли ми були відрізані й самі вели ботів, — геть
-    const hb = new Set(d.bo.map(bombKey)), hp = new Set(d.pk.map(pickKey)), hk = new Set(d.kk.map(kickKey)), hd = new Set(d.dt.map(detKey));
+    const hb = new Set(d.bo.map(bombKey)), hp = new Set(d.pk.map(pickKey)), hd = new Set(d.dt.map(detKey));
     const own = (o) => !R.sl[o] || !R.sl[o].b;
-    R.board.dropEvents((b) => own(b.o) || hb.has(bombKey(b)), (p) => own(p.o) || hp.has(pickKey(p)),
-      (k) => own(k.o) || hk.has(kickKey(k)), (e) => own(e.o) || hd.has(detKey(e)));
+    R.board.dropEvents((b) => own(b.o) || hb.has(bombKey(b)), (p) => own(p.o) || hp.has(pickKey(p)), (e) => own(e.o) || hd.has(detKey(e)));
     for (const b of d.bo) if (R.sl[b.o] && inField(R, b.x, b.y) && b.p >= 1 && b.p <= 16) R.board.addBomb(b, !b.rc && b.t + FUSE_MS < now - 300);
     for (const p of d.pk) if (R.sl[p.o] && inField(R, p.x, p.y)) R.board.addPick(p);
-    for (const k of d.kk) if (kickOk(R, k)) R.board.addKick(k);
     for (const e of d.dt) if (R.sl[e.o]) R.board.addDet(e);
     for (const e of d.dd) if (kill(R, e.o, e.t, e.k)) hooks.death(e.o);
     if (S.mySlot < 0) return;
     for (const b of R.board.bombs.values()) if (b.o === S.mySlot && !hb.has(bombKey(b))) net.send('bomb', { r: R.r, ...b });
     for (const p of R.board.picks.values()) if (p.o === S.mySlot && !hp.has(pickKey(p))) net.send('pick', { r: R.r, ...p });
-    for (const k of R.board.kicks.values()) if (k.o === S.mySlot && !hk.has(kickKey(k))) net.send('kick', { r: R.r, ...k });
     for (const e of R.board.dets.values()) if (e.o === S.mySlot && !hd.has(detKey(e))) net.send('det', { r: R.r, ...e });
   },
   cfg(d) { if (net.isHost()) host.setCfg(d); },
@@ -247,7 +236,7 @@ function applyWorld(w) {
     if ((s.b || s.pruned) && e.a && !s.a) { s.a = true; s.dt = 0; s.kb = KB_NONE; s.pruned = false; }
     if (!s.b || !s.a) return;
     s.x = uq8(e.x); s.y = uq8(e.y); s.dr = e.dr; s.mv = e.mv;
-    s.nb = e.nb; s.fp = e.fp; s.sp = e.sp; s.ps = e.ps; s.rs = e.rs; s.kk = e.kk; s.rc = e.rc;
+    s.nb = e.nb; s.fp = e.fp; s.sp = e.sp; s.ps = e.ps; s.rs = e.rs; s.rc = e.rc;
   });
   for (const e of w.mo) {
     const m = R.mons.find(x => x.i === e.i);

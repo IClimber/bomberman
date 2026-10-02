@@ -39,7 +39,7 @@ function statusHtml() {
 
 // ================= Колбеки мережі =================
 const ITEM_TEXT = ['', '+1 бомба', '+1 до вогню', 'Швидкість', 'Прохід крізь бомби', 'Стійкість до вогню 10 с',
-  'Штурхання бомб: іди на бомбу', isTouch ? 'Детонатор: кнопка 📡' : 'Детонатор: E або Enter'];
+  isTouch ? 'Детонатор: кнопка 📡' : 'Детонатор: E або Enter'];
 let cue = { r: 0, beep: 99, sd: false, end: false };
 hooks.room = () => { renderLobby(); renderNet(nameOf); };
 hooks.hud = () => { renderLobby(); renderNet(nameOf); };
@@ -62,7 +62,6 @@ hooks.round = () => {
   renderLobby();
 };
 hooks.bomb = () => sfx.place();
-hooks.kick = () => sfx.kick();
 hooks.death = (o) => {
   const R = S.R;
   if (!R?.sl[o]) return;
@@ -132,9 +131,7 @@ function stepMe(R, now, dt) {
   s.mv = false;
   if (dir) {
     s.dr = dir;
-    const want = speedOf(s.sp) * dt, went = moveActor(s, dir, want, (x, y) => B.solid(x, y, false, s.ps));
-    s.mv = went > 0;
-    if (s.kk && went < want - 1e-9) tryKick(R, s, dir, now);
+    s.mv = moveActor(s, dir, speedOf(s.sp) * dt, (x, y) => B.solid(x, y, false, s.ps)) > 0;
   }
   if (wantBomb) {
     wantBomb = false;
@@ -175,27 +172,13 @@ function stepMe(R, now, dt) {
     feedDeath(R, s.o);
   }
 }
-// Штурхання: уперся в бомбу, що стоїть у сусідній клітинці по ходу (і сам у центрі своєї), а за нею вільно — котиться
-let kickAt = 0;
-function tryKick(R, s, dir, now) {
-  const B = R.board, cx = Math.round(s.x), cy = Math.round(s.y);
-  if (Math.abs(DX[dir] ? s.y - cy : s.x - cx) > 0.05 || (DX[dir] ? (s.x - cx) * DX[dir] : (s.y - cy) * DY[dir]) < -0.05) return;
-  const x = cx + DX[dir], y = cy + DY[dir], a = B.active.get(B.idx(x, y));
-  if (!a || a.d || !B.rollable(B.idx(x + DX[dir], y + DY[dir])) || now - kickAt < 250) return;
-  kickAt = now;
-  const k = { o: s.o, x, y, d: dir, t: now };
-  B.addKick(k);
-  B.advance(now);
-  net.send('kick', { r: R.r, ...k });
-  sfx.kick();
-}
 
 // Розсилка своєї пози: зміни — одразу (до 20 Гц), інакше раз на секунду; ім'я — раз на 4 с
 let lastPos = '', lastPosT = 0;
 setInterval(() => {
   const R = S.R, s = R && R.sl[S.mySlot];
   if (!s || !s.a || !net.linkCount() || S.room?.g !== R.r) return;
-  const p = { r: R.r, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv, nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs > net.sharedNow(), kk: s.kk, rc: s.rc };
+  const p = { r: R.r, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv, nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs > net.sharedNow(), rc: s.rc };
   const key = JSON.stringify(p), t = performance.now();
   if (key !== lastPos || t - lastPosT > 1000) {
     lastPos = key;

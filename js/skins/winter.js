@@ -1,7 +1,7 @@
 // winter.js — «Зима»: нічний сніг, камені під снігом, крижані брили й подарунки, крижана стіна;
 // сніговики в шапках і шарфах кольору гравця; пінгвіни, єті, хурделиці.
-import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE } from '../sim.js';
-import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, spark, kickIcon } from './common.js';
+import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
+import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, spark } from './common.js';
 import { itemTile } from './classic.js';
 
 const SNOW = '#f2f6fb', COAL = '#1d2230', CARROT = '#ff8a2b';
@@ -89,7 +89,7 @@ function wall(g, s) {
 }
 
 // Бонуси: 🧨 петарда, 🎆 феєрверк, ⛸ ковзан, 🛷 санчата, 🧣 шарф
-const ITEM_BG = { [IT_BOMB]: '#2f6fd6', [IT_FIRE]: '#3b2a6b', [IT_SPEED]: '#16a39a', [IT_PASS]: '#7a3fd0', [IT_RESIST]: '#d9a21b', [IT_KICK]: '#c0392b', [IT_REMOTE]: '#2e7d4f' };
+const ITEM_BG = { [IT_BOMB]: '#2f6fd6', [IT_FIRE]: '#3b2a6b', [IT_SPEED]: '#16a39a', [IT_PASS]: '#7a3fd0', [IT_RESIST]: '#d9a21b', [IT_REMOTE]: '#2e7d4f' };
 function item(g, k, s) {
   itemTile(g, s, ITEM_BG[k]);
   const cx = s / 2, cy = s / 2 + s * 0.03;
@@ -124,8 +124,7 @@ function item(g, k, s) {
     rr(g, cx + s * 0.04, cy, s * 0.12, s * 0.26, s * 0.03); g.fill();
     g.fillStyle = '#fff';
     for (let j = 0; j < 3; j++) g.fillRect(cx + s * 0.04, cy + s * (0.04 + j * 0.08), s * 0.12, s * 0.035);
-  } else if (k === IT_KICK) kickIcon(g, cx, cy, s, '#8a5a33', '#3a2414', '#c0392b');
-  else if (k === IT_REMOTE) {                                      // дзвоник-детонатор
+  } else if (k === IT_REMOTE) {                                      // дзвоник-детонатор
     g.fillStyle = '#ffd23f';
     g.beginPath(); g.moveTo(cx - s * 0.2, cy + s * 0.14); g.quadraticCurveTo(cx - s * 0.16, cy - s * 0.2, cx, cy - s * 0.22);
     g.quadraticCurveTo(cx + s * 0.16, cy - s * 0.2, cx + s * 0.2, cy + s * 0.14); g.closePath(); g.fill();
@@ -247,7 +246,7 @@ function monster(g, m, s, T, wob) {
 export default {
   name: 'Зима',
   bg: '#0c1424',
-  emoji: { bomb: '🧨', fire: '🎆', speed: '⛸️', pass: '🛷', resist: '🧣', kick: '🥾', remote: '🔔' },
+  emoji: { bomb: '🧨', fire: '🎆', speed: '⛸️', pass: '🛷', resist: '🧣', remote: '🔔' },
   fire: ['#ff4a3d', '#ffb347', '#fffbe6'],
   burn: ['#ff5a2a', 'rgba(255,200,80,0)'],
   blocks: 4,

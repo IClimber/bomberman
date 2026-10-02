@@ -1,6 +1,6 @@
 // retro.js — «Ретро 8-біт»: усе — піксель-арт 16×16, як на NES: зелене поле, бетонні стовпи, червона цегла,
 // бомбермен кольору гравця, кулька, синій злюка, привид. Спрайти кешуються під розмір клітинки.
-import { IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE } from '../sim.js';
+import { IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
 import { makeCanvas, pix, shade, ellipse, bombBeat, bombFlash } from './common.js';
 
 const N = 16;
@@ -105,18 +105,6 @@ const ICON = {
     '.WWWWWWWW.',
     '.WW.WW.WW.',
     '.W...W..W.',
-  ]],
-  [IT_KICK]: ['bg', '#fc7460', [
-    'KKK.......',
-    'KFK.......',
-    'KFK.......',
-    'KFK...KKK.',
-    'KFKK.KWKKK',
-    'KFFFKKKKKK',
-    'KFFFFKKKKK',
-    'KKKKKKKKK.',
-    'RRRRRK.KK.',
-    '..........',
   ]],
   [IT_REMOTE]: ['bg', '#f8b800', [
     '.......Y..',
@@ -335,7 +323,7 @@ function monster(g, m, s, T) {
 export default {
   name: 'Ретро 8-біт',
   bg: '#000000',
-  emoji: { bomb: '💣', fire: '🔥', speed: '🛼', pass: '👻', resist: '🛡', kick: '👢', remote: '🕹️' },
+  emoji: { bomb: '💣', fire: '🔥', speed: '🛼', pass: '👻', resist: '🛡', remote: '🕹️' },
   fire: ['#f83800', '#fca044', '#fcfcfc'],
   burn: ['#f83800', 'rgba(252,160,68,0)'],
   pixel: true,

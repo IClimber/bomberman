@@ -3,9 +3,9 @@
 // рамка — синя обкладинка зі спіраллю зверху; блоки — предмети з тінню: ящик, накреслений ручкою, зім'ятий папірець,
 // жовтий стікер; стіни — чорний маркер. Гравці — чоловічки з кружечком-головою і футболкою кольору гравця;
 // клякса, паперовий літачок, гумка-привид. Вогонь — маркери-виділювачі.
-// Бонуси: 💣 бомба, 🔥 вогонь, ✈️ швидкість, 👻 прохід, 🛡️ стійкість, 👟 штурхання, 📡 детонатор.
-import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE } from '../sim.js';
-import { TAU, rr, rnd, luma, shade, circle, ellipse, line, poly, bombBeat, bombFlash, spark, kickIcon, remoteIcon } from './common.js';
+// Бонуси: 💣 бомба, 🔥 вогонь, ✈️ швидкість, 👻 прохід, 🛡️ стійкість, 📡 детонатор.
+import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
+import { TAU, rr, rnd, luma, shade, circle, ellipse, line, poly, bombBeat, bombFlash, spark, remoteIcon } from './common.js';
 
 const PAPER = '#fbfaf3', GRID = 'rgba(96,150,214,0.35)', MARGIN = 'rgba(226,92,104,0.55)';
 const INK = '#2a4fa8', PENCIL = '#55585f', DARK = '#23252c';
@@ -163,7 +163,7 @@ function wall(g, s) {
 }
 
 // Бонуси — кольоровий стікер з піктограмою ручкою
-const NOTE = { [IT_BOMB]: '#9fd3ff', [IT_FIRE]: '#ffb38a', [IT_SPEED]: '#c7f29b', [IT_PASS]: '#d7c2ff', [IT_RESIST]: '#ffe17a', [IT_KICK]: '#9ff0e0', [IT_REMOTE]: '#ffb3d1' };
+const NOTE = { [IT_BOMB]: '#9fd3ff', [IT_FIRE]: '#ffb38a', [IT_SPEED]: '#c7f29b', [IT_PASS]: '#d7c2ff', [IT_RESIST]: '#ffe17a', [IT_REMOTE]: '#ffb3d1' };
 function item(g, k, s) {
   const cx = s / 2, cy = s / 2;
   g.fillStyle = 'rgba(60,60,80,0.2)'; g.fillRect(s * 0.14, s * 0.16, s * 0.76, s * 0.76);
@@ -201,8 +201,7 @@ function item(g, k, s) {
     g.strokeStyle = INK; g.lineWidth = lw; g.stroke();
     sketch(g, x - s * 0.08, y, x - s * 0.01, y + s * 0.08, lw, '#2e9e4f', 1);
     sketch(g, x - s * 0.01, y + s * 0.08, x + s * 0.11, y - s * 0.08, lw, '#2e9e4f', 2);
-  } else if (k === IT_KICK) kickIcon(g, x, y, s, '#fff', INK, DARK);
-  else if (k === IT_REMOTE) remoteIcon(g, x, y, s, '#4a5068', '#e0353b', INK);
+  } else if (k === IT_REMOTE) remoteIcon(g, x, y, s, '#4a5068', '#e0353b', INK);
 }
 
 // Бомба, замальована ручкою: чорне коло з «каракулями», відблиск і ґніт
@@ -309,7 +308,7 @@ export default {
   bg: '#6b4a2e',
   backdrop,
   shadow: 'rgba(30,15,5,0.55)',
-  emoji: { bomb: '💣', fire: '🔥', speed: '✈️', pass: '👻', resist: '🛡️', kick: '👟', remote: '📡' },
+  emoji: { bomb: '💣', fire: '🔥', speed: '✈️', pass: '👻', resist: '🛡️', remote: '📡' },
   fire: ['#ff5c8a', '#ffb02b', '#fff59a'],
   burn: ['#ff5c8a', 'rgba(255,220,80,0)'],
   blocks: 3,

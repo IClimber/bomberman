@@ -2,9 +2,9 @@
 // рамка — плетений тин з глечиками на кілках; блоки — предмети з тінню: соняшники, сніп пшениці, копиця сіна;
 // стіни — дубові колоди. Гравці — козаки з оселедцем і вусами, у вишиванці й шароварах кольору гравця;
 // чорт, сердитий гусак, мавка. Бомби — макітри з ґнотом. Тло — орнамент вишивки.
-// Бонуси: 🏺 бомба, 🌶️ вогонь, 🐎 швидкість (підкова), 🕊️ прохід, 🧄 стійкість (часник), 👢 штурхання (чобіт), 🔔 детонатор (дзвін).
-import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE } from '../sim.js';
-import { TAU, rr, rnd, luma, shade, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, spark, kickIcon } from './common.js';
+// Бонуси: 🏺 бомба, 🌶️ вогонь, 🐎 швидкість (підкова), 🕊️ прохід, 🧄 стійкість (часник), 🔔 детонатор (дзвін).
+import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
+import { TAU, rr, rnd, luma, shade, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, spark } from './common.js';
 
 const GRASS = '#7cae46', GRASS2 = '#76a742', WHITE = '#f6f1e4', STRAW = '#d9b45a', STRAW_D = '#a9842f';
 const RED = '#c62828', CLAY = '#c8743c', CLAY_D = '#8c4a22', SKIN = '#f2c9a0', WOOD = '#8a5a33';
@@ -179,8 +179,7 @@ function item(g, k, s) {
     g.beginPath(); g.moveTo(cx, cy - s * 0.08); g.lineTo(cx, cy + s * 0.2); g.stroke();
     poly(g, [[cx - s * 0.03, cy - s * 0.08], [cx, cy - s * 0.24], [cx + s * 0.03, cy - s * 0.08]], '#e8dcc6');
     line(g, cx - s * 0.06, cy + s * 0.21, cx + s * 0.06, cy + s * 0.21, s * 0.02, '#c8b9a6');
-  } else if (k === IT_KICK) kickIcon(g, cx, cy, s, RED, '#3a1a10', '#2a2a2a');
-  else if (k === IT_REMOTE) {                                        // дзвін
+  } else if (k === IT_REMOTE) {                                        // дзвін
     line(g, cx, cy - s * 0.28, cx, cy - s * 0.2, s * 0.04, WOOD);
     g.fillStyle = '#d9a21b';
     g.beginPath(); g.moveTo(cx - s * 0.2, cy + s * 0.14); g.quadraticCurveTo(cx - s * 0.15, cy - s * 0.2, cx, cy - s * 0.21);
@@ -303,7 +302,7 @@ export default {
   bg: '#f3ead6',
   backdrop,
   shadow: 'rgba(60,40,20,0.45)',
-  emoji: { bomb: '🏺', fire: '🌶️', speed: '🐎', pass: '🕊️', resist: '🧄', kick: '👢', remote: '🔔' },
+  emoji: { bomb: '🏺', fire: '🌶️', speed: '🐎', pass: '🕊️', resist: '🧄', remote: '🔔' },
   fire: ['#d9381e', '#ff9f1c', '#fff1b8'],
   burn: ['#ff6a00', 'rgba(255,220,80,0)'],
   blocks: 3,
