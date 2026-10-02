@@ -1,4 +1,5 @@
-// winter.js — «Зима»: нічний сніг, камені під снігом, крижані брили й подарунки, крижана стіна;
+// winter.js — «Зима»: нічний сніг, стовпи — камені під снігом на всю клітинку, блоки — предмети з тінню (крижані брили,
+// подарунки), крижана стіна;
 // сніговики в шапках і шарфах кольору гравця; пінгвіни, єті, хурделиці.
 import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
 import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, spark } from './common.js';
@@ -48,28 +49,39 @@ function stone(g, x, y, s, border) {
   }
 }
 
-// Блоки: 0, 1 — крижані брили, 2 — червоний подарунок, 3 — зелений
+// Блоки — предмети з тінню, менші за клітинку: 0, 1 — крижані брили (грані, тріщини), 2 — червоний подарунок, 3 — зелений
 function block(g, s, v) {
-  const d = Math.max(1, Math.round(s * 0.08));
+  ellipse(g, s / 2, s * 0.88, s * 0.38, s * 0.09, 'rgba(20,30,70,0.35)');
   if (v < 2) {
-    bevel(g, 0, 0, s, '#9fd8f2', '#dff5ff', '#5ba3cc', d);
-    g.fillStyle = 'rgba(255,255,255,0.45)';
-    g.beginPath(); g.moveTo(s * 0.2, s * 0.15); g.lineTo(s * 0.38, s * 0.15); g.lineTo(s * 0.15, s * 0.6); g.lineTo(s * 0.15, s * 0.32); g.closePath(); g.fill();
-    g.strokeStyle = 'rgba(60,120,170,0.55)'; g.lineWidth = Math.max(1, s * 0.025);
-    g.beginPath();
-    if (v === 0) { g.moveTo(s * 0.55, s * 0.12); g.lineTo(s * 0.62, s * 0.4); g.lineTo(s * 0.8, s * 0.5); g.moveTo(s * 0.62, s * 0.4); g.lineTo(s * 0.5, s * 0.62); }
-    else { g.moveTo(s * 0.88, s * 0.6); g.lineTo(s * 0.6, s * 0.7); g.lineTo(s * 0.5, s * 0.88); g.moveTo(s * 0.6, s * 0.7); g.lineTo(s * 0.45, s * 0.6); }
-    g.stroke();
+    const pts = v === 0
+      ? [[0.16, 0.36], [0.34, 0.14], [0.7, 0.12], [0.86, 0.32], [0.84, 0.82], [0.18, 0.84]]
+      : [[0.14, 0.42], [0.28, 0.18], [0.62, 0.1], [0.86, 0.3], [0.86, 0.8], [0.2, 0.86]];
+    const P = pts.map(([a, b]) => [a * s, b * s]);
+    poly(g, P, '#8fd0f0');
+    poly(g, [P[0], P[1], P[2], P[3], [s * 0.66, s * 0.4], [s * 0.3, s * 0.46]], '#d4f1ff');   // верхня грань
+    poly(g, [P[3], P[4], [s * 0.66, s * 0.82], [s * 0.66, s * 0.4]], '#6fb4dc');              // бічна грань
+    g.strokeStyle = '#3d7fb0'; g.lineWidth = Math.max(1, s * 0.035); g.lineJoin = 'round';
+    g.beginPath(); P.forEach(([a, b], k) => (k ? g.lineTo(a, b) : g.moveTo(a, b))); g.closePath(); g.stroke();
+    g.strokeStyle = 'rgba(61,127,176,0.6)'; g.lineWidth = Math.max(1, s * 0.022);
+    g.beginPath(); g.moveTo(s * 0.3, s * 0.46); g.lineTo(s * 0.66, s * 0.4); g.lineTo(P[3][0], P[3][1]); g.moveTo(s * 0.66, s * 0.4); g.lineTo(s * 0.66, s * 0.82);
+    g.moveTo(s * 0.36, s * 0.56); g.lineTo(s * 0.44, s * 0.66); g.lineTo(s * 0.4, s * 0.76); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.7)';
+    g.beginPath(); g.moveTo(s * 0.26, s * 0.52); g.lineTo(s * 0.32, s * 0.52); g.lineTo(s * 0.26, s * 0.74); g.closePath(); g.fill();
     return;
   }
   const box = v === 2 ? '#d93a3a' : '#2e9e5b', rib = v === 2 ? '#ffd23f' : '#e8394a';
-  bevel(g, 0, 0, s, box, shade(box, 0.25), shade(box, -0.35), d);
+  const x0 = s * 0.14, y0 = s * 0.3, w = s * 0.72, h = s * 0.56;
+  g.fillStyle = box; g.fillRect(x0, y0, w, h);
+  g.fillStyle = shade(box, -0.3); g.fillRect(x0 + w * 0.72, y0, w * 0.28, h);
+  g.fillStyle = shade(box, 0.2); rr(g, x0 - s * 0.04, y0 - s * 0.12, w + s * 0.08, s * 0.16, s * 0.03); g.fill();   // кришка
   g.fillStyle = rib;
-  g.fillRect(s * 0.43, d, s * 0.14, s - 2 * d);
-  g.fillRect(d, s * 0.43, s - 2 * d, s * 0.14);
-  for (const sx of [-1, 1]) ellipse(g, s / 2 + sx * s * 0.12, s * 0.38, s * 0.12, s * 0.07, rib, sx * 0.5);
-  circle(g, s / 2, s * 0.42, s * 0.05, shade(rib, -0.2));
-  snowCap(g, 0, 0, s, 0.12);
+  g.fillRect(s * 0.43, y0 - s * 0.12, s * 0.14, h + s * 0.12);
+  g.fillRect(x0, y0 + h * 0.4, w, s * 0.1);
+  for (const sx of [-1, 1]) ellipse(g, s / 2 + sx * s * 0.12, y0 - s * 0.16, s * 0.12, s * 0.07, rib, sx * 0.5);
+  circle(g, s / 2, y0 - s * 0.13, s * 0.05, shade(rib, -0.2));
+  g.strokeStyle = shade(box, -0.5); g.lineWidth = Math.max(1, s * 0.025);
+  g.strokeRect(x0, y0, w, h);
+  g.fillStyle = SNOW; g.beginPath(); g.ellipse(s * 0.3, y0 - s * 0.1, s * 0.12, s * 0.04, 0, 0, TAU); g.fill();
 }
 
 // Стіна раптової смерті — темна крига з інеєм

@@ -1,4 +1,5 @@
-// halloween.js — «Хелловін»: цвинтар уночі, надгробки замість стовпів, мур склепу, гарбузи й труни,
+// halloween.js — «Хелловін»: цвинтар уночі, стовпи — кладка склепу на всю клітинку (як мур рамки), блоки — гарбузи
+// й труни з тінню,
 // стіна з черепом; відьми й чаклуни в капелюхах кольору гравця; скелети, кажани, привиди; зелений відьмин вогонь.
 import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE, mulberry32 } from '../sim.js';
 import { TAU, rr, bevel, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, spark, flameShape, ghostPath } from './common.js';
@@ -39,43 +40,31 @@ function floor(g, px, py, s, x, y, map) {
   pillarShade(g, map, x, y, px, py, s, 'rgba(0,0,0,0.35)');
 }
 
-// Стовпи — надгробки на могилах; рамка — мур склепу
-function stone(g, x, y, s, border, cx, cy, map) {
-  if (border) {
-    g.fillStyle = '#2a2433'; g.fillRect(x, y, s, s);
-    g.fillStyle = '#463d55';
-    const h = s / 2, gap = Math.max(1, s * 0.05);
-    for (let r = 0; r < 2; r++) {
-      const off = (r + cx + cy) % 2 ? s / 2 : 0;
-      for (let k = -1; k < 2; k++) {
-        const bx = x + off + k * s, w = s - gap;
-        const x0 = Math.max(x, bx + gap / 2), x1 = Math.min(x + s, bx + w + gap / 2);
-        if (x1 > x0) g.fillRect(x0, y + r * h + gap / 2, x1 - x0, h - gap);
-      }
+// Рамка — мур склепу; стовп — кам'яна кладка склепу на всю клітинку з вирізьбленим хрестом чи готичною аркою
+function masonry(g, x, y, s, cx, cy, base, brick) {
+  g.fillStyle = base; g.fillRect(x, y, s, s);
+  g.fillStyle = brick;
+  const h = s / 2, gap = Math.max(1, s * 0.05);
+  for (let r = 0; r < 2; r++) {
+    const off = (r + cx + cy) % 2 ? s / 2 : 0;
+    for (let k = -1; k < 2; k++) {
+      const bx = x + off + k * s, w = s - gap;
+      const x0 = Math.max(x, bx + gap / 2), x1 = Math.min(x + s, bx + w + gap / 2);
+      if (x1 > x0) g.fillRect(x0, y + r * h + gap / 2, x1 - x0, h - gap);
     }
-    g.fillStyle = 'rgba(255,255,255,0.08)'; g.fillRect(x, y, s, Math.max(1, s * 0.05));
-    return;
   }
-  const i = cy * map.GW + cx, v = rnd(i, 9);
-  g.fillStyle = '#2b2339'; g.fillRect(x, y, s, s);
-  ellipse(g, x + s / 2, y + s * 0.86, s * 0.42, s * 0.12, '#3d2f2a');
-  const w = s * 0.7, top = y + s * 0.1, bx = x + (s - w) / 2;
-  g.fillStyle = '#8f8b9e';
-  g.beginPath();
-  if (v < 0.5) { g.moveTo(bx, y + s * 0.86); g.lineTo(bx, top + w / 2); g.arc(bx + w / 2, top + w / 2, w / 2, Math.PI, 0); g.lineTo(bx + w, y + s * 0.86); }
-  else { g.moveTo(bx, y + s * 0.86); g.lineTo(bx, top + s * 0.12); g.lineTo(bx + w * 0.3, top); g.lineTo(bx + w * 0.7, top); g.lineTo(bx + w, top + s * 0.12); g.lineTo(bx + w, y + s * 0.86); }
-  g.closePath(); g.fill();
-  g.fillStyle = '#5f5a70';
-  g.fillRect(bx + w - s * 0.08, top + s * 0.15, s * 0.08, s * 0.61);
-  g.strokeStyle = '#55506a'; g.lineWidth = Math.max(1, s * 0.05); g.lineCap = 'butt';
-  if (v < 0.5) {                                                   // хрест
-    g.beginPath(); g.moveTo(x + s / 2, top + s * 0.18); g.lineTo(x + s / 2, top + s * 0.52); g.moveTo(x + s * 0.38, top + s * 0.3); g.lineTo(x + s * 0.62, top + s * 0.3); g.stroke();
-  } else {                                                         // RIP — три риски
-    g.lineWidth = Math.max(1, s * 0.035);
-    for (let j = 0; j < 3; j++) { g.beginPath(); g.moveTo(x + s * 0.32, top + s * (0.22 + j * 0.14)); g.lineTo(x + s * 0.62, top + s * (0.22 + j * 0.14)); g.stroke(); }
-  }
-  circle(g, bx + w * 0.2, y + s * 0.75, s * 0.06, 'rgba(90,140,70,0.7)');
-  circle(g, bx + w * 0.3, y + s * 0.8, s * 0.045, 'rgba(90,140,70,0.7)');
+  g.fillStyle = 'rgba(255,255,255,0.08)'; g.fillRect(x, y, s, Math.max(1, s * 0.05));
+}
+function stone(g, x, y, s, border, cx, cy, map) {
+  if (border) return masonry(g, x, y, s, cx, cy, '#2a2433', '#463d55');
+  const d = Math.max(1, Math.round(s * 0.07)), i = cy * map.GW + cx;
+  masonry(g, x, y, s, cx, cy, '#211b29', '#4b4259');
+  g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(x, y + s - d, s, d); g.fillRect(x + s - d, y, d, s);
+  g.fillStyle = 'rgba(255,255,255,0.1)'; g.fillRect(x, y, s, d * 0.6); g.fillRect(x, y, d * 0.6, s);
+  g.fillStyle = '#2a2433';                                         // різьба: хрест або арка
+  if (rnd(i, 9) < 0.5) { g.fillRect(x + s * 0.45, y + s * 0.2, s * 0.1, s * 0.58); g.fillRect(x + s * 0.32, y + s * 0.34, s * 0.36, s * 0.1); }
+  else { g.beginPath(); g.moveTo(x + s * 0.34, y + s * 0.78); g.lineTo(x + s * 0.34, y + s * 0.42); g.arc(x + s / 2, y + s * 0.42, s * 0.16, Math.PI, 0); g.lineTo(x + s * 0.66, y + s * 0.78); g.closePath(); g.fill(); }
+  if (rnd(i, 4) < 0.4) { circle(g, x + s * 0.2, y + s * 0.84, s * 0.06, 'rgba(90,140,70,0.6)'); circle(g, x + s * 0.3, y + s * 0.88, s * 0.04, 'rgba(90,140,70,0.6)'); }
 }
 
 // Блоки: 0 — гарбуз-ліхтар, 1 — гарбуз, 2 — труна
@@ -95,6 +84,7 @@ function pumpkin(g, s, face) {
 }
 function block(g, s, v) {
   if (v < 2) return pumpkin(g, s, v === 0);
+  ellipse(g, s / 2, s * 0.92, s * 0.3, s * 0.07, 'rgba(0,0,0,0.4)');
   const pts = [[0.36, 0.04], [0.64, 0.04], [0.82, 0.3], [0.7, 0.96], [0.3, 0.96], [0.18, 0.3]].map(([a, b]) => [a * s, b * s]);
   poly(g, pts, '#5a3520');
   g.strokeStyle = '#2e1a0f'; g.lineWidth = Math.max(1, s * 0.04); g.stroke();

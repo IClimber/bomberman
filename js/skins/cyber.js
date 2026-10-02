@@ -1,5 +1,6 @@
-// cyber.js — «Кіберпанк»: темна підлога з неоновою сіткою й доріжками мікросхем, стовпи з рожевим неоном,
-// ящики-голограми й сервери, «файрвол» замість стін; гравці в шоломах з візором, дрони, павуки-боти, глітч-привиди.
+// cyber.js — «Кіберпанк»: темна підлога з неоновою сіткою й доріжками мікросхем, стовпи — темні матові плити
+// корпусу на всю клітинку (як рамка); блоки — яскраві предмети з тінню й неоновим сяйвом: ящики-голограми й сервери;
+// «файрвол» замість стін; гравці в шоломах з візором, дрони, павуки-боти, глітч-привиди.
 import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
 import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, pix, ghostPath, remotePath } from './common.js';
 
@@ -25,6 +26,7 @@ function floor(g, px, py, s, x, y, map) {
   pillarShade(g, map, x, y, px, py, s, 'rgba(0,0,0,0.4)');
 }
 
+// Рамка й стовпи — темні матові плити корпусу (стовп — на всю клітинку, без неону: яскраві лише блоки)
 function stone(g, x, y, s, border) {
   const d = Math.max(1, Math.round(s * 0.08));
   if (border) {
@@ -33,35 +35,49 @@ function stone(g, x, y, s, border) {
     g.fillRect(x + d, y + s * 0.47, s - 2 * d, Math.max(1, s * 0.05));
     return;
   }
-  bevel(g, x, y, s, '#241e40', '#3b3366', '#0f0c1f', d);
-  g.shadowColor = MG; g.shadowBlur = s * 0.25;                     // у кеші, тож сяйво можна
-  g.strokeStyle = MG; g.lineWidth = Math.max(1, s * 0.05);
-  rr(g, x + s * 0.22, y + s * 0.22, s * 0.56, s * 0.56, s * 0.08); g.stroke();
-  g.shadowBlur = 0;
-  g.fillStyle = rgba(MG, 0.14);
-  rr(g, x + s * 0.22, y + s * 0.22, s * 0.56, s * 0.56, s * 0.08); g.fill();
+  bevel(g, x, y, s, '#2a2547', '#423b6b', '#0c0a1a', d);
+  g.fillStyle = '#221d3c'; g.fillRect(x + s * 0.18, y + s * 0.18, s * 0.64, s * 0.64);
+  g.strokeStyle = 'rgba(255,255,255,0.05)'; g.lineWidth = Math.max(1, s * 0.03);
+  g.beginPath();
+  for (let k = 0; k < 4; k++) { g.moveTo(x + s * 0.18, y + s * (0.3 + k * 0.14)); g.lineTo(x + s * 0.82, y + s * (0.3 + k * 0.14)); }
+  g.stroke();
+  for (const [fx, fy] of [[0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]]) circle(g, x + s * fx, y + s * fy, s * 0.03, '#0c0a1a');
+  g.fillStyle = rgba(CY, 0.25); g.fillRect(x + s * 0.18, y + s * 0.78, s * 0.64, Math.max(1, s * 0.03));
 }
 
-// Блоки: 0 — ящик-голограма, 1 — серверна стійка
+// Блоки — яскраві предмети з тінню й сяйвом: 0 — ящик-голограма, 1 — серверна стійка
 function block(g, s, v) {
-  const d = Math.max(1, Math.round(s * 0.07));
+  ellipse(g, s / 2, s * 0.9, s * 0.38, s * 0.08, 'rgba(0,0,0,0.55)');
   if (v === 0) {
-    bevel(g, 0, 0, s, '#2b2152', '#4a3a85', '#160f2e', d);
-    g.shadowColor = CY; g.shadowBlur = s * 0.15;
-    g.strokeStyle = CY; g.lineWidth = Math.max(1, s * 0.045);
-    g.strokeRect(s * 0.17, s * 0.17, s * 0.66, s * 0.66);
-    g.beginPath(); g.moveTo(s * 0.17, s * 0.17); g.lineTo(s * 0.83, s * 0.83); g.moveTo(s * 0.83, s * 0.17); g.lineTo(s * 0.17, s * 0.83); g.stroke();
+    const x0 = s * 0.14, y0 = s * 0.24, w = s * 0.62, h = s * 0.62, k = s * 0.12;   // куб: перед, верх, бік
+    g.shadowColor = CY; g.shadowBlur = s * 0.22;                   // у кеші, тож сяйво можна
+    g.fillStyle = rgba(CY, 0.22); g.fillRect(x0, y0, w, h);
     g.shadowBlur = 0;
+    poly(g, [[x0, y0], [x0 + k, y0 - k], [x0 + w + k, y0 - k], [x0 + w, y0]], rgba(CY, 0.45));
+    poly(g, [[x0 + w, y0], [x0 + w + k, y0 - k], [x0 + w + k, y0 + h - k], [x0 + w, y0 + h]], rgba(CY, 0.3));
+    g.strokeStyle = CY; g.lineWidth = Math.max(1, s * 0.035); g.lineJoin = 'round';
+    g.strokeRect(x0, y0, w, h);
+    g.beginPath();
+    g.moveTo(x0, y0); g.lineTo(x0 + k, y0 - k); g.lineTo(x0 + w + k, y0 - k); g.lineTo(x0 + w + k, y0 + h - k); g.lineTo(x0 + w, y0 + h);
+    g.moveTo(x0 + w, y0); g.lineTo(x0 + w + k, y0 - k);
+    g.moveTo(x0, y0); g.lineTo(x0 + w, y0 + h); g.moveTo(x0 + w, y0); g.lineTo(x0, y0 + h);
+    g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.18)';
+    for (let j = 0; j < 4; j++) g.fillRect(x0, y0 + h * (0.15 + j * 0.22), w, Math.max(1, s * 0.015));   // розгортка голограми
     return;
   }
-  bevel(g, 0, 0, s, '#1c2238', '#34406a', '#0b0e1c', d);
-  const leds = [CY, '#3dff8a', MG, CY];
+  g.shadowColor = MG; g.shadowBlur = s * 0.2;
+  g.fillStyle = '#3a3f66'; rr(g, s * 0.16, s * 0.08, s * 0.68, s * 0.8, s * 0.06); g.fill();
+  g.shadowBlur = 0;
+  g.strokeStyle = MG; g.lineWidth = Math.max(1, s * 0.035);
+  rr(g, s * 0.16, s * 0.08, s * 0.68, s * 0.8, s * 0.06); g.stroke();
+  const leds = [CY, '#3dff8a', MG, '#ffe23d'];
   for (let r = 0; r < 4; r++) {
-    const yy = s * (0.15 + r * 0.18);
-    g.fillStyle = '#080b16'; g.fillRect(s * 0.13, yy, s * 0.74, s * 0.12);
-    circle(g, s * 0.22, yy + s * 0.06, s * 0.03, leds[r]);
-    circle(g, s * 0.31, yy + s * 0.06, s * 0.03, leds[(r + 2) % 4]);
-    g.fillStyle = rgba(CY, 0.4); g.fillRect(s * 0.42, yy + s * 0.045, s * (0.16 + 0.07 * ((r * 3) % 4)), s * 0.03);
+    const yy = s * (0.15 + r * 0.17);
+    g.fillStyle = '#0a0c1c'; g.fillRect(s * 0.22, yy, s * 0.56, s * 0.12);
+    circle(g, s * 0.3, yy + s * 0.06, s * 0.03, leds[r]);
+    circle(g, s * 0.39, yy + s * 0.06, s * 0.03, leds[(r + 2) % 4]);
+    g.fillStyle = rgba(CY, 0.55); g.fillRect(s * 0.47, yy + s * 0.045, s * (0.1 + 0.06 * ((r * 3) % 4)), s * 0.03);
   }
 }
 

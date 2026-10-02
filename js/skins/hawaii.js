@@ -1,5 +1,5 @@
-// hawaii.js — «Гаваї»: пісок, океан замість рамки, валуни й тікі замість стовпів, пальми, кущі гібіскуса
-// й ананаси замість блоків, бамбуковий паркан замість стін; серфери в гавайських сорочках кольору гравця;
+// hawaii.js — «Гаваї»: пісок, океан замість рамки, стовпи — плити вулканічного каменю на всю клітинку, блоки — предмети
+// з тінню: пальми, кущі гібіскуса, ананаси, розфарбовані тікі; бамбуковий паркан замість стін; серфери в гавайських сорочках кольору гравця;
 // краби, акули, медузи; бомби-кокоси й лавовий вогонь. Бонуси: 🥥 кокос, 🌋 вулкан, 🍹 коктейль, 🏄 дошка, 🧴 крем від сонця.
 import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
 import { TAU, rr, rnd, luma, shade, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, spark } from './common.js';
@@ -35,7 +35,7 @@ function floor(g, px, py, s, x, y, map) {
   pillarShade(g, map, x, y, px, py, s, 'rgba(120,80,30,0.2)');
 }
 
-// Рамка — океан з хвилями; стовпи — валуни, зрідка тікі
+// Рамка — океан з хвилями; стовп — плита темного вулканічного каменю на всю клітинку (пориста, з мохом)
 function stone(g, x, y, s, border, cx, cy, map) {
   if (border) {
     g.fillStyle = (cx + cy) % 2 ? '#1f8fc4' : '#1d8abd'; g.fillRect(x, y, s, s);
@@ -48,32 +48,33 @@ function stone(g, x, y, s, border, cx, cy, map) {
     }
     return;
   }
-  g.fillStyle = SAND; g.fillRect(x, y, s, s);
-  if (rnd(cy * map.GW + cx, 12) < 0.3) return tiki(g, x, y, s);
-  ellipse(g, x + s / 2, y + s * 0.84, s * 0.44, s * 0.12, 'rgba(120,80,30,0.3)');
-  g.fillStyle = '#6b625c';
-  g.beginPath();
-  g.moveTo(x + s * 0.06, y + s * 0.8); g.quadraticCurveTo(x + s * 0.02, y + s * 0.3, x + s * 0.3, y + s * 0.14);
-  g.quadraticCurveTo(x + s * 0.6, y + s * 0.02, x + s * 0.82, y + s * 0.2); g.quadraticCurveTo(x + s * 1.0, y + s * 0.45, x + s * 0.94, y + s * 0.8);
-  g.closePath(); g.fill();
-  g.fillStyle = '#857b74';
-  g.beginPath(); g.moveTo(x + s * 0.18, y + s * 0.5); g.quadraticCurveTo(x + s * 0.24, y + s * 0.24, x + s * 0.5, y + s * 0.2); g.quadraticCurveTo(x + s * 0.36, y + s * 0.34, x + s * 0.18, y + s * 0.5); g.fill();
-  g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(x + s * 0.08, y + s * 0.72, s * 0.84, s * 0.08);
+  const i = cy * map.GW + cx, d = Math.max(1, Math.round(s * 0.08));
+  g.fillStyle = '#26221f'; g.fillRect(x, y, s, s);
+  g.fillStyle = '#4a433d'; g.fillRect(x, y, s - d, s - d);
+  g.fillStyle = '#3a3430'; g.fillRect(x + d, y + d, s - 2 * d, s - 2 * d);
+  for (let j = 0; j < 9; j++) circle(g, x + s * (0.15 + rnd(i, j) * 0.7), y + s * (0.15 + rnd(i, j + 20) * 0.7), s * (0.02 + rnd(i, j + 40) * 0.03), 'rgba(0,0,0,0.45)');
+  for (let j = 0; j < 4; j++) circle(g, x + s * (0.15 + rnd(i, j + 60) * 0.7), y + s * (0.15 + rnd(i, j + 70) * 0.7), s * 0.02, 'rgba(255,255,255,0.12)');
+  g.fillStyle = 'rgba(70,140,60,0.55)';                            // мох по верхньому краю
+  for (let j = 0; j < 3; j++) { g.beginPath(); g.ellipse(x + s * (0.2 + j * 0.3 + rnd(i, 80 + j) * 0.1), y + d * 1.5, s * 0.1, s * 0.05, 0, 0, TAU); g.fill(); }
 }
+// Тікі — дерев'яний, розфарбований (блок, руйнується)
 function tiki(g, x, y, s) {
   ellipse(g, x + s / 2, y + s * 0.88, s * 0.34, s * 0.08, 'rgba(120,80,30,0.3)');
   for (const [a, c] of [[-0.6, LEAF_D], [0, LEAF], [0.6, LEAF_D]]) ellipse(g, x + s / 2 + Math.sin(a) * s * 0.14, y + s * 0.12, s * 0.07, s * 0.14, c, a);
-  g.fillStyle = WOOD; rr(g, x + s * 0.2, y + s * 0.14, s * 0.6, s * 0.76, s * 0.1); g.fill();
-  g.fillStyle = shade(WOOD, -0.3); g.fillRect(x + s * 0.2, y + s * 0.34, s * 0.6, s * 0.04);
-  for (const sx of [-1, 1]) { ellipse(g, x + s / 2 + sx * s * 0.13, y + s * 0.45, s * 0.09, s * 0.07, '#f2d29b'); circle(g, x + s / 2 + sx * s * 0.13, y + s * 0.46, s * 0.035, '#2a1608'); }
-  poly(g, [[x + s * 0.46, y + s * 0.5], [x + s * 0.54, y + s * 0.5], [x + s * 0.57, y + s * 0.62], [x + s * 0.43, y + s * 0.62]], shade(WOOD, -0.25));
-  g.fillStyle = '#2a1608'; rr(g, x + s * 0.3, y + s * 0.66, s * 0.4, s * 0.14, s * 0.04); g.fill();
-  g.fillStyle = '#f2d29b';
-  for (let j = 0; j < 4; j++) g.fillRect(x + s * (0.33 + j * 0.09), y + s * 0.67, s * 0.06, s * 0.05);
+  g.fillStyle = '#b06a32'; rr(g, x + s * 0.2, y + s * 0.14, s * 0.6, s * 0.72, s * 0.1); g.fill();
+  g.fillStyle = '#2fb5c4'; g.fillRect(x + s * 0.2, y + s * 0.32, s * 0.6, s * 0.05);
+  g.fillStyle = '#ff5a3d'; g.fillRect(x + s * 0.2, y + s * 0.78, s * 0.6, s * 0.05);
+  for (const sx of [-1, 1]) { ellipse(g, x + s / 2 + sx * s * 0.13, y + s * 0.47, s * 0.09, s * 0.07, '#fff1c4'); circle(g, x + s / 2 + sx * s * 0.13, y + s * 0.48, s * 0.035, '#2a1608'); }
+  poly(g, [[x + s * 0.46, y + s * 0.52], [x + s * 0.54, y + s * 0.52], [x + s * 0.57, y + s * 0.63], [x + s * 0.43, y + s * 0.63]], '#8a4a20');
+  g.fillStyle = '#2a1608'; rr(g, x + s * 0.3, y + s * 0.66, s * 0.4, s * 0.1, s * 0.04); g.fill();
+  g.fillStyle = '#fff1c4';
+  for (let j = 0; j < 4; j++) g.fillRect(x + s * (0.33 + j * 0.09), y + s * 0.67, s * 0.06, s * 0.04);
+  g.strokeStyle = '#5a3418'; g.lineWidth = Math.max(1, s * 0.025); rr(g, x + s * 0.2, y + s * 0.14, s * 0.6, s * 0.72, s * 0.1); g.stroke();
 }
 
-// Блоки: 0, 1 — пальми (дзеркальні), 2 — кущ гібіскуса, 3 — ананас
+// Блоки — предмети з тінню: 0, 1 — пальми (дзеркальні), 2 — кущ гібіскуса, 3 — ананас, 4 — тікі
 function block(g, s, v) {
+  if (v === 4) return tiki(g, 0, 0, s);
   ellipse(g, s / 2, s * 0.88, s * 0.36, s * 0.09, 'rgba(120,80,30,0.3)');
   if (v < 2) {
     if (v) { g.translate(s, 0); g.scale(-1, 1); }
@@ -311,6 +312,6 @@ export default {
   emoji: { bomb: '🥥', fire: '🌋', speed: '🍹', pass: '🏄', resist: '🧴', remote: '🐚' },
   fire: ['#e8401c', '#ff9b21', '#fff0b3'],
   burn: ['#ff6a00', 'rgba(255,200,80,0)'],
-  blocks: 4,
+  blocks: 5,
   floor, stone, block, wall, item, bomb, player, monster,
 };

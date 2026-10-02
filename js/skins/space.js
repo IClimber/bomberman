@@ -1,4 +1,5 @@
-// space.js — «Космос»: зорі навколо, палуба станції, колони з вогником, корпус з ілюмінаторами, контейнери,
+// space.js — «Космос»: зорі навколо, палуба станції, стовпи — темні переборки на всю клітинку (як корпус з ілюмінаторами),
+// блоки — яскраві контейнери з тінню,
 // гермодвері замість стін; астронавти в скафандрах кольору гравця; слизняки, тарілки, примари порожнечі.
 import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE, mulberry32 } from '../sim.js';
 import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, ghostPath } from './common.js';
@@ -49,27 +50,31 @@ function stone(g, x, y, s, border, cx, cy, map) {
     }
     return;
   }
-  bevel(g, x, y, s, '#8a94aa', '#b9c1d3', '#4d556a', d);
-  for (const [fx, fy] of [[0.2, 0.2], [0.8, 0.2], [0.2, 0.8], [0.8, 0.8]]) circle(g, x + s * fx, y + s * fy, s * 0.04, '#5b6378');
-  circle(g, x + s / 2, y + s / 2, s * 0.17, '#3a4152');
-  g.shadowColor = GLOW; g.shadowBlur = s * 0.2;                    // у кеші
-  circle(g, x + s / 2, y + s / 2, s * 0.09, GLOW);
-  g.shadowBlur = 0;
+  // стовп — темна переборка корпусу (як рамка) на всю клітинку, з тьмяним вогником: яскраві лише контейнери
+  bevel(g, x, y, s, '#3e4659', '#5c667e', '#1c2029', d);
+  g.fillStyle = '#343b4c'; g.fillRect(x + s * 0.2, y + s * 0.2, s * 0.6, s * 0.6);
+  g.fillStyle = 'rgba(255,255,255,0.07)'; g.fillRect(x + s * 0.2, y + s * 0.2, s * 0.6, Math.max(1, s * 0.03));
+  for (const [fx, fy] of [[0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]]) circle(g, x + s * fx, y + s * fy, s * 0.035, '#1c2029');
+  g.fillStyle = '#1c2029'; g.fillRect(x + s * 0.3, y + s * 0.47, s * 0.4, s * 0.06);
+  circle(g, x + s / 2, y + s / 2, s * 0.05, rgba(GLOW, 0.55));
 }
 
-// Блоки — вантажні контейнери трьох кольорів
-const CRATE = ['#d9822b', '#2b8fd9', '#8a9a3a'];
+// Блоки — яскраві вантажні контейнери трьох кольорів: предмети з тінню (перед і верх), менші за клітинку
+const CRATE = ['#f08a2b', '#2b9af0', '#9ab83a'];
 function block(g, s, v) {
-  const d = Math.max(1, Math.round(s * 0.07)), c = CRATE[v];
-  bevel(g, 0, 0, s, c, shade(c, 0.3), shade(c, -0.45), d);
-  g.fillStyle = shade(c, -0.25);
-  for (let j = 1; j < 5; j++) g.fillRect(s * j / 5 - s * 0.02, d * 1.5, s * 0.04, s - 3 * d);
-  g.fillStyle = shade(c, -0.5);
-  for (const [fx, fy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) g.fillRect(fx ? s - d - s * 0.14 : d, fy ? s - d - s * 0.14 : d, s * 0.14, s * 0.14);
-  g.fillStyle = 'rgba(255,255,255,0.75)';
-  g.fillRect(s * 0.3, s * 0.44, s * 0.4, s * 0.1);
-  g.fillStyle = shade(c, -0.4);
-  g.fillRect(s * 0.34, s * 0.47, s * 0.32, s * 0.04);
+  const c = CRATE[v], x0 = s * 0.12, y0 = s * 0.26, w = s * 0.76, h = s * 0.6;
+  ellipse(g, s / 2, s * 0.9, s * 0.4, s * 0.08, 'rgba(0,0,0,0.5)');
+  g.fillStyle = shade(c, 0.35); g.fillRect(x0, y0 - s * 0.14, w, s * 0.14);       // верх
+  g.fillStyle = c; g.fillRect(x0, y0, w, h);                                       // перед
+  g.fillStyle = shade(c, -0.2);
+  for (let j = 1; j < 5; j++) g.fillRect(x0 + w * j / 5 - s * 0.015, y0 + s * 0.04, s * 0.03, h - s * 0.08);
+  g.fillStyle = shade(c, -0.45);
+  for (const fx of [0, 1]) for (const fy of [0, 1]) g.fillRect(fx ? x0 + w - s * 0.1 : x0, fy ? y0 + h - s * 0.1 : y0 - s * 0.14, s * 0.1, s * 0.1);
+  g.strokeStyle = shade(c, -0.55); g.lineWidth = Math.max(1, s * 0.025);
+  g.strokeRect(x0, y0 - s * 0.14, w, h + s * 0.14);
+  g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0 + w, y0); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(s * 0.32, y0 + h * 0.36, s * 0.36, s * 0.1);
+  g.fillStyle = shade(c, -0.4); g.fillRect(s * 0.36, y0 + h * 0.36 + s * 0.03, s * 0.28, s * 0.04);
 }
 
 // Стіна — гермодвері зі смугами небезпеки
