@@ -4,7 +4,7 @@ import { S, EMOJI, q8 } from './state.js';
 import { net, hooks, act, nameOf, GRACE_MS } from './net.js';
 import { createRoom, startHostLoop } from './host.js';
 import { moveActor, speedOf, canPlace, makeMap, hashStr, DX, DY, MON } from './sim.js';
-import { killerAt, kill, applyItem, RES_WIN, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
+import { killerAt, kill, applyItem, orphanDets, RES_WIN, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
 import { createRenderer } from './render.js';
 import { initLobby, renderLobby } from './lobby.js';
 import { renderHud, renderNet, toast, initHud, hudBottom, feedDeath, feedEmo } from './hud.js';
@@ -38,7 +38,8 @@ function statusHtml() {
 }
 
 // ================= Колбеки мережі =================
-const ITEM_TEXT = ['', '+1 бомба', '+1 до вогню', 'Швидкість', 'Прохід крізь бомби', 'Стійкість до вогню 10 с'];
+const ITEM_TEXT = ['', '+1 бомба', '+1 до вогню', 'Швидкість', 'Прохід крізь бомби', 'Стійкість до вогню 10 с',
+  'Штурхання бомб: іди на бомбу', isTouch ? 'Детонатор: кнопка 📡' : 'Детонатор: E або Enter'];
 let cue = { r: 0, beep: 99, sd: false, end: false };
 hooks.room = () => { renderLobby(); renderNet(nameOf); };
 hooks.hud = () => { renderLobby(); renderNet(nameOf); };
@@ -61,6 +62,7 @@ hooks.round = () => {
   renderLobby();
 };
 hooks.bomb = () => sfx.place();
+hooks.kick = () => sfx.kick();
 hooks.death = (o) => {
   const R = S.R;
   if (!R?.sl[o]) return;
@@ -82,7 +84,7 @@ hooks.hidden = () => { held.length = 0; resetTouch(); };
 const KEY_DIR = { ArrowUp: 1, KeyW: 1, ArrowRight: 2, KeyD: 2, ArrowDown: 3, KeyS: 3, ArrowLeft: 4, KeyA: 4 };
 const KEY_EMO = /^(?:Digit|Numpad)([1-9])$/;
 const held = [];                                                       // напрями в порядку натискання; діє останній
-let wantBomb = false;
+let wantBomb = false, wantDet = false;
 addEventListener('keydown', (e) => {
   unlock();
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
@@ -92,6 +94,8 @@ addEventListener('keydown', (e) => {
     if (S.R) e.preventDefault();
   } else if (e.code === 'Space') {
     if (S.R) { e.preventDefault(); if (!e.repeat) wantBomb = true; }
+  } else if (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'NumpadEnter') {
+    if (S.R) { e.preventDefault(); if (!e.repeat) wantDet = true; }
   } else if (KEY_EMO.test(e.code) && S.R && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
     const k = Number(KEY_EMO.exec(e.code)[1]) - 1;
     if (k < EMOJI.length && S.room?.g === S.R.r) act.emo(k);
@@ -103,7 +107,7 @@ addEventListener('keyup', (e) => {
   if (d) { const k = held.indexOf(d); if (k >= 0) held.splice(k, 1); }
 });
 addEventListener('blur', () => { held.length = 0; resetTouch(); });
-initTouch(() => { if (S.R) wantBomb = true; }, (k) => act.emo(k));
+initTouch(() => { if (S.R) wantBomb = true; }, (k) => act.emo(k), () => { if (S.R) wantDet = true; });
 for (const type of ['pointerup', 'touchend', 'click']) addEventListener(type, unlock, { capture: true, passive: true });
 
 function toggleFs() {
@@ -123,22 +127,34 @@ document.addEventListener('fullscreenchange', () => { $('fsBtn').textContent = d
 function stepMe(R, now, dt) {
   const s = R.sl[S.mySlot];
   if (!s) return;
-  if (!s.a || R.p !== 0 || now < R.t0) { s.mv = false; wantBomb = false; return; }
+  if (!s.a || R.p !== 0 || now < R.t0) { s.mv = false; wantBomb = false; wantDet = false; return; }
   const B = R.board, dir = touch.dir || held[held.length - 1] || 0;
   s.mv = false;
   if (dir) {
     s.dr = dir;
-    s.mv = moveActor(s, dir, speedOf(s.sp) * dt, (x, y) => B.solid(x, y, false, s.ps)) > 0;
+    const want = speedOf(s.sp) * dt, went = moveActor(s, dir, want, (x, y) => B.solid(x, y, false, s.ps));
+    s.mv = went > 0;
+    if (s.kk && went < want - 1e-9) tryKick(R, s, dir, now);
   }
   if (wantBomb) {
     wantBomb = false;
     const x = Math.round(s.x), y = Math.round(s.y);
     if (B.activeOf(s.o) < s.nb && canPlace(B, x, y)) {
-      const b = { o: s.o, n: ++s.bn, x, y, t: now, p: s.fp };
+      const b = { o: s.o, n: ++s.bn, x, y, t: now, p: s.fp, rc: s.rc };
       B.addBomb(b);
       B.advance(now);
       net.send('bomb', { r: R.r, ...b });
       sfx.place();
+    }
+  }
+  if (wantDet) {                                                       // детонатор: найстарша своя бомба
+    wantDet = false;
+    const a = B.remoteOf(s.o)[0];
+    if (a) {
+      const e = { o: s.o, n: a.b.n, b: a.b.t, t: now };
+      B.addDet(e);
+      B.advance(now);
+      net.send('det', { r: R.r, ...e });
     }
   }
   const cx = Math.round(s.x), cy = Math.round(s.y), it = B.itemAt(B.idx(cx, cy));
@@ -154,9 +170,24 @@ function stepMe(R, now, dt) {
   const kb = killerAt(R, s.x, s.y, now, s.rs, R.mons.map(viewOfMon));
   if (kb >= 0 && kill(R, s.o, now, kb)) {
     net.send('dead', { r: R.r, o: s.o, t: now, k: kb });
+    for (const e of orphanDets(R, s.o, now)) { B.addDet(e); net.send('det', { r: R.r, ...e }); }   // бомби з детонатором — за запал
     sfx.death();
     feedDeath(R, s.o);
   }
+}
+// Штурхання: уперся в бомбу, що стоїть у сусідній клітинці по ходу (і сам у центрі своєї), а за нею вільно — котиться
+let kickAt = 0;
+function tryKick(R, s, dir, now) {
+  const B = R.board, cx = Math.round(s.x), cy = Math.round(s.y);
+  if (Math.abs(DX[dir] ? s.y - cy : s.x - cx) > 0.05 || (DX[dir] ? (s.x - cx) * DX[dir] : (s.y - cy) * DY[dir]) < -0.05) return;
+  const x = cx + DX[dir], y = cy + DY[dir], a = B.active.get(B.idx(x, y));
+  if (!a || a.d || !B.rollable(B.idx(x + DX[dir], y + DY[dir])) || now - kickAt < 250) return;
+  kickAt = now;
+  const k = { o: s.o, x, y, d: dir, t: now };
+  B.addKick(k);
+  B.advance(now);
+  net.send('kick', { r: R.r, ...k });
+  sfx.kick();
 }
 
 // Розсилка своєї пози: зміни — одразу (до 20 Гц), інакше раз на секунду; ім'я — раз на 4 с
@@ -164,7 +195,7 @@ let lastPos = '', lastPosT = 0;
 setInterval(() => {
   const R = S.R, s = R && R.sl[S.mySlot];
   if (!s || !s.a || !net.linkCount() || S.room?.g !== R.r) return;
-  const p = { r: R.r, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv, nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs > net.sharedNow() };
+  const p = { r: R.r, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv, nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs > net.sharedNow(), kk: s.kk, rc: s.rc };
   const key = JSON.stringify(p), t = performance.now();
   if (key !== lastPos || t - lastPosT > 1000) {
     lastPos = key;
@@ -251,6 +282,7 @@ function frame() {
   renderHud(now);
   const me = playing && R.sl[S.mySlot];
   $('controls').classList.toggle('show', !!me && me.a && R.p === 0);
+  $('detBtn').hidden = !(me && me.rc);
   renderer.draw({
     R: playing ? R : null, now, mySlot: S.mySlot, decor, insets: insets(), skin: S.room?.v ?? 0,
     slots: playing ? R.sl.map(s => ({

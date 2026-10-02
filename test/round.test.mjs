@@ -14,7 +14,7 @@ const people = (n, bots = 0) => [
   ...Array.from({ length: n }, (_, k) => ({ i: 'player' + 'abcdefgh'[k] + '0000', b: false, c: k, n: 'P' + k })),
   ...Array.from({ length: bots }, (_, k) => ({ i: '', b: true, c: n + k, n: 'Бот ' + (k + 1) })),
 ];
-const noop = { bomb() {}, pick() {}, dead() {} };
+const noop = { bomb() {}, pick() {}, dead() {}, det() {} };
 
 test('слоти стартують у кутах з базовими бонусами', () => {
   const R = newRound({ r: 1, seed: 5, m: MODE_VS, s: 0, d: 1, t0: 0, sl: people(2, 2) });

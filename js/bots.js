@@ -12,11 +12,13 @@ import { stepTo } from './monsters.js';
 // усі тікали від вогню однаково досконало; tame — («Один проти одного») «смирний»: не полює на суперників (у вогні —
 // як блок, без бомби «для тиску» і тяги до них), одна бомба за раз, по бонуси не йде;
 // монстри («Нормально», «Важко», див. monsterReach): cross — запас (мс), з яким пройти клітинку раніше за монстра,
-// hold — скільки (мс) монстр не повинен устигнути дійти туди, де бот стоїть
+// hold — скільки (мс) монстр не повинен устигнути дійти туди, де бот стоїть;
+// detAge — бомбу з детонатором, у вогні якої суперник (монстр), підриває не раніше, ніж за стільки мс після того, як поставив
+// (інакше людина не встигає й помітити бомбу); без суперника у вогні — коли вибухнула б звичайна (FUSE_MS)
 const LEVEL = [
-  { think: 450, vsThink: 600, slip: 0.3, aggro: 0.5, spare: 650, react: 1600, tame: true },
-  { think: 250, slip: 0.08, aggro: 0.8, spare: 400, react: 600, cross: 200, hold: 700 },
-  { think: 120, slip: 0, aggro: 1, spare: 350, cross: 0, hold: 800 },
+  { think: 450, vsThink: 600, slip: 0.3, aggro: 0.5, spare: 650, react: 1600, tame: true, detAge: FUSE_MS },
+  { think: 250, slip: 0.08, aggro: 0.8, spare: 400, react: 600, cross: 200, hold: 700, detAge: 1800 },
+  { think: 120, slip: 0, aggro: 1, spare: 350, cross: 0, hold: 800, detAge: 1000 },
 ];
 const LOOK = 14;                     // ціль шукаємо не далі стількох кроків
 const NEAR = 4;                      // суперників і монстрів враховуємо лише для клітинок за стільки кроків: далі вони встигнуть піти
@@ -226,10 +228,11 @@ const monOf = (ctx, L) => ({ threat: ctx.threat, reach: ctx.reach, cross: L.cros
 function pathOk(bot, ai, ctx, L) {
   const { board, now } = ctx, GW = board.map.GW, danger = ctx.danger(), mon = monOf(ctx, L), ms = 1000 / speedOf(bot.sp);
   if (danger[ai.ty * GW + ai.tx] !== Infinity) return false;
-  let t = now;
+  let t = now, from = ai.ty * GW + ai.tx;
   for (const j of ai.path) {
     t += ms;
-    if (!canEnter(bot, board, j, t, ms, danger, null, mon, L.spare)) return false;
+    if (!canEnter(bot, board, j, t, ms, danger, null, mon, L.spare, from)) return false;
+    from = j;
   }
   const j = ai.path[ai.path.length - 1];
   return danger[j] === Infinity && board.wallAt[j] > t + WALL_SOON && monOk(mon, j, t) && !board.fireAt(j);
@@ -325,12 +328,14 @@ function canEscape(bot, board, i, t, ms, danger, mon, spare, roomy) {
   return false;
 }
 
-// Чи можна зайти в клітинку j, дійшовши до її центру в момент ta: вона прохідна, не горить, а перший вибух у ній
-// (danger / hypo) буде вже після того, як ми з неї вийдемо (або останній уже минув).
+// Чи можна зайти в клітинку j (з клітинки from), дійшовши до її центру в момент ta: вона прохідна, не горить, а перший вибух
+// у ній (danger / hypo) буде вже після того, як ми з неї вийдемо (або останній уже минув). Під бомбою з детонатором
+// (danger.any) — лише зсередини її ж вогню, коли тікаємо: ззовні туди не заходимо.
 // Монстри (mon): «Легко» — не заходимо в клітинки поруч із ними; інакше — лише в ті, які встигнемо пройти раніше за них.
-function canEnter(bot, board, j, ta, ms, danger, hypo, mon, spare) {
+function canEnter(bot, board, j, ta, ms, danger, hypo, mon, spare, from) {
   const GW = board.map.GW, x = j % GW;
   if (board.solid(x, (j - x) / GW, false, bot.ps)) return false;
+  if (danger.any && danger.any[j] && !danger.any[from]) return false;
   if (mon && (mon.reach ? !(mon.reach[j] > ta + ms * 0.5 + mon.cross) : mon.threat && mon.threat[j])) return false;
   let dj = danger[j], dl = danger.last[j];                        // перший і останній вибух у клітинці
   if (hypo && hypo.has(j)) { const h = hypo.get(j); dj = Math.min(dj, h); dl = Math.max(dl, h); }
@@ -352,7 +357,7 @@ function bfs(bot, board, start, t0, ms, danger, hypo, mon, spare, bombAt = -1, m
     const ta = t0 + (dist[i] + 1) * ms;
     for (let d = 1; d <= 4; d++) {
       const j = (y + DY[d]) * GW + x + DX[d];
-      if (dist[j] >= 0 || j === bombAt || !canEnter(bot, board, j, ta, ms, danger, hypo, mon, spare)) continue;
+      if (dist[j] >= 0 || j === bombAt || !canEnter(bot, board, j, ta, ms, danger, hypo, mon, spare, i)) continue;
       dist[j] = dist[i] + 1;
       prev[j] = i;
       q.push(j);
@@ -368,3 +373,32 @@ function pathTo(r, goal) {
 
 // Чи можна боту поставити бомбу тут (для хоста)
 export const botCanPlace = (bot, board) => board.activeOf(bot.o) < bot.nb && canPlace(board, Math.round(bot.x), Math.round(bot.y));
+
+// Детонатор: яку свою бомбу підірвати зараз (null — жодну). Підриваємо, щойно самі (де стоїмо і куди йдемо) і, в «Команді»,
+// свої поза її вогнем (з ланцюжком): коли вибухнула б звичайна або, якщо у вогні суперник (монстр), — після detAge.
+// Від бомби з детонатором бот тікає, як від звичайної (Board.danger), тож потім підриває її здалеку.
+export function botDetonate(bot, ctx) {
+  const { board, now } = ctx, GW = board.map.GW, L = LEVEL[ctx.diff] ?? LEVEL[1];
+  const at = (e) => Math.round(e.y) * GW + Math.round(e.x);
+  for (const a of board.remoteOf(bot.o)) {
+    const fire = chainCells(board, a);
+    if (fire.has(at(bot)) || (bot.ai && fire.has(bot.ai.ty * GW + bot.ai.tx))) continue;
+    if (ctx.coop && ctx.allies.some(e => fire.has(at(e)))) continue;
+    const age = now - a.b.t;
+    if (age >= FUSE_MS || (age >= L.detAge && ctx.enemies.some(e => fire.has(at(e))))) return a;
+  }
+  return null;
+}
+// Клітинки вогню бомби a разом із ланцюжком (бомби, які він зачепить, — і їхній вогонь)
+function chainCells(board, a) {
+  const cells = new Set(), seen = new Set([a.i]), q = [a];
+  while (q.length) {
+    const b = q.pop();
+    for (const j of blastCells(board, b.i, b.b.p)) {
+      cells.add(j);
+      const o = board.active.get(j);
+      if (o && !seen.has(j)) { seen.add(j); q.push(o); }
+    }
+  }
+  return cells;
+}

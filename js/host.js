@@ -5,7 +5,7 @@ import { net, hooks, lobbyMembers, nameOf, seedOf, resultShown, SYNC_LAG } from 
 import { S, COLORS, q8 } from './state.js';
 import { SIZES, mulberry32 } from './sim.js';
 import { SKINS } from './skins/index.js';
-import { newRound, hostStep, COUNTDOWN_MS, MODE_VS, RES_WIN, RES_TEAM_WIN, KB_LEFT } from './round.js';
+import { newRound, hostStep, orphanDets, COUNTDOWN_MS, MODE_VS, RES_WIN, RES_TEAM_WIN, KB_LEFT } from './round.js';
 
 export const WORLD_EVERY = 100;      // хост розсилає стан раунду раз на стільки мс (і одразу при змінах)
 const TICK_MS = 50;
@@ -37,7 +37,12 @@ export function memberGone(id) {
   const R = S.R;
   if (R && R.p === 0) {
     const s = R.sl.find(e => !e.b && e.i === id && e.a);
-    if (s) { s.a = false; s.dt = net.sharedNow(); s.kb = KB_LEFT; s.pruned = true; hooks.death(s.o); sendWorld(); }
+    if (s) {
+      s.a = false; s.dt = net.sharedNow(); s.kb = KB_LEFT; s.pruned = true;
+      for (const e of orphanDets(R, s.o, s.dt)) { R.board.addDet(e); EV.det(e); }   // його бомби з детонатором — за запал
+      hooks.death(s.o);
+      sendWorld();
+    }
   }
   sendLobby();
   hooks.room();
@@ -138,7 +143,7 @@ export function sendWorld(to) {
     r: R.r, p: R.p, m: R.m, s: R.s, d: R.d, t0: R.t0, ts, k: R.res, wn: R.wn, en: dg.n, eh: dg.h,
     sl: R.sl.map(s => ({
       i: s.i, b: s.b, c: s.c, n: s.n, a: s.a, kb: s.kb, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv,
-      nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs,
+      nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs, kk: s.kk, rc: s.rc,
     })),
     mo: R.mons.map(m => ({ i: m.i, k: m.k, x: q8(m.x), y: q8(m.y), dr: m.d || 0, a: m.a, kb: m.kb })),
     g: R.board.snapshot(),
@@ -150,7 +155,7 @@ export function sendWorld(to) {
 export function sendEvents(to) {
   const R = S.R, B = R.board;
   net.send('evs', {
-    r: R.r, bo: [...B.bombs.values()], pk: [...B.picks.values()],
+    r: R.r, bo: [...B.bombs.values()], pk: [...B.picks.values()], kk: [...B.kicks.values()], dt: [...B.dets.values()],
     dd: R.sl.filter(s => !s.a).map(s => ({ o: s.o, t: s.dt, k: s.kb })),
   }, to);
 }
@@ -159,6 +164,7 @@ export function sendEvents(to) {
 const EV = {
   bomb(b) { net.send('bomb', { r: S.R.r, ...b }); hooks.bomb(b); },
   pick(p) { net.send('pick', { r: S.R.r, ...p }); },
+  det(e) { net.send('det', { r: S.R.r, ...e }); },
   dead(o, t, k) { net.send('dead', { r: S.R.r, o, t, k }); hooks.death(o); },
   monster(m) { hooks.monster?.(m); },
 };

@@ -11,8 +11,8 @@ export const touch = { dir: 0 };
 
 import { EMOJI } from './state.js';
 
-// onBomb — натиснули «💣», onEmo(k) — реакцію EMOJI[k]
-export function initTouch(onBomb, onEmo) {
+// onBomb — натиснули «💣», onEmo(k) — реакцію EMOJI[k], onDet — детонатор
+export function initTouch(onBomb, onEmo, onDet) {
   if (!isTouch) return;
   document.documentElement.classList.add('touch');
   const dpad = document.getElementById('dpad'), knob = document.getElementById('knob'), bomb = document.getElementById('bombBtn');
@@ -57,8 +57,25 @@ export function initTouch(onBomb, onEmo) {
   bomb.addEventListener('lostpointercapture', up);
   addEventListener('contextmenu', (e) => e.preventDefault());
 
+  const det = document.getElementById('detBtn'), detUp = () => det.classList.remove('pressed');
+  det.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    det.setPointerCapture(e.pointerId);
+    det.classList.add('pressed');
+    onDet();
+  });
+  det.addEventListener('pointerup', detUp);
+  det.addEventListener('pointercancel', detUp);
+  det.addEventListener('lostpointercapture', detUp);
+
   const emo = document.getElementById('emoBtn'), bar = document.getElementById('emoBar');
-  emo.addEventListener('pointerdown', (e) => { e.preventDefault(); bar.classList.toggle('show'); });
+  emo.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const r = emo.getBoundingClientRect();
+    bar.style.right = `${innerWidth - r.right}px`;
+    bar.style.bottom = `${innerHeight - r.top + 8}px`;
+    bar.classList.toggle('show');
+  });
   bar.replaceChildren(...EMOJI.map((ch, k) => {
     const b = document.createElement('button');
     b.tabIndex = -1;

@@ -7,6 +7,8 @@ export const SIZES = [[13, 11], [17, 13], [21, 15], [25, 17], [31, 21]];   // і
 export const FUSE_MS = 2500;         // запал бомби
 export const FLAME_MS = 500;         // скільки тримається вогонь (і горить блок)
 export const RESIST_MS = 10000;      // стійкість до вогню з бонуса
+export const ROLL_MS = 110;          // штурхнута бомба котиться: клітинка за стільки мс
+export const REMOTE_ESCAPE = 1500;   // бот, у вогні бомби з детонатором, розраховує вибратися звідти за стільки мс
 export const BLOCK_FILL = 0.7;       // частка вільних клітинок під блоками
 export const BASE_SPEED = 3.2;       // клітинок за секунду
 export const SPEED_STEP = 0.5;       // за кожен бонус швидкості
@@ -18,9 +20,9 @@ export const DIFF_K = [0.6, 1, 1.5]; // множник кількості мон
 
 // Клітинки
 export const EMPTY = 0, PILLAR = 1, BLOCK = 2, WALL = 3;
-// Бонуси
-export const IT_BOMB = 1, IT_FIRE = 2, IT_SPEED = 3, IT_PASS = 4, IT_RESIST = 5;
-const ITEM_PER_100 = [0, 6, 6, 3, 1.5, 2.5];     // скільки бонусів кожного виду на 100 блоків (не менше одного)
+// Бонуси (вид — 3 біти: не більше 7)
+export const IT_BOMB = 1, IT_FIRE = 2, IT_SPEED = 3, IT_PASS = 4, IT_RESIST = 5, IT_KICK = 6, IT_REMOTE = 7;
+const ITEM_PER_100 = [0, 6, 6, 3, 1.5, 2.5, 2, 1.2];   // скільки бонусів кожного виду на 100 блоків (не менше одного)
 // Монстри: 0 — блукач, 1 — переслідувач, 2 — привид (крізь блоки)
 export const MON = [
   { speed: 1.5 },
@@ -53,9 +55,21 @@ export const speedOf = (ups) => BASE_SPEED + SPEED_STEP * ups;
 // бомби ботів з тим самим номером — різні бомби, і зливатися в одну не повинні
 export const bombKey = (b) => `${b.o}:${b.n}:${b.t}`;
 export const pickKey = (p) => `${p.o}:${p.x}:${p.y}:${p.t}`;
+// Штурхнув бомбу в клітинці (x, y) у напрямі d; підірвав детонатором бомбу (o, n, b — її час) у момент t
+export const kickKey = (k) => `${k.o}:${k.x}:${k.y}:${k.d}:${k.t}`;
+export const detKey = (e) => `${e.o}:${e.n}:${e.b}:${e.t}`;
 // Записи подій зберігаємо з хешем — для контрольної суми (digest), якою учасники звіряються з хостом
-const bombRec = (b) => ({ o: b.o, n: b.n, x: b.x, y: b.y, t: b.t, p: b.p, h: hashStr(`b${bombKey(b)}`) });
+const bombRec = (b) => ({ o: b.o, n: b.n, x: b.x, y: b.y, t: b.t, p: b.p, rc: !!b.rc, h: hashStr(`b${bombKey(b)}`) });
 const pickRec = (p) => ({ o: p.o, x: p.x, y: p.y, t: p.t, h: hashStr(`p${pickKey(p)}`) });
+const kickRec = (k) => ({ o: k.o, x: k.x, y: k.y, d: k.d, t: k.t, h: hashStr(`k${kickKey(k)}`) });
+const detRec = (e) => ({ o: e.o, n: e.n, b: e.b, t: e.t, h: hashStr(`d${detKey(e)}`) });
+// Черга подій — від найпізнішої до найранішої (з кінця — наступна); вставка зі збереженням порядку
+const byTime = (x, y) => y.t - x.t;
+function enqueue(q, e) {
+  let j = q.length;
+  while (j > 0 && q[j - 1].t < e.t) j--;
+  q.splice(j, 0, e);
+}
 const bombLess = (a, b) => a.t < b.t || (a.t === b.t && (a.o < b.o || (a.o === b.o && a.n < b.n)));
 
 // ================= Карта =================
@@ -191,9 +205,13 @@ export function moveActor(pos, dir, dist, solid) {
 export const cellOf = (map, x, y) => Math.round(y) * map.GW + Math.round(x);
 
 // ================= Поле: бомби, вибухи, бонуси, стіни =================
-// Стан — чиста функція від карти (або знімка хоста), подій раунду (бомби, підбори) і часу.
+// Стан — чиста функція від карти (або знімка хоста), подій раунду (бомби, підбори, штурхання, детонатор) і часу.
 // advance(T) обробляє події до T за порядком часу; подія, що прийшла із запізненням (час уже минув), —
-// перерахунок з початку (reset). Порядок при рівному часі: вибухи, догоряння блоків, бомби, підбори, стіни.
+// перерахунок з початку (reset). Порядок при рівному часі: вибухи, догоряння блоків, крок бомби, що котиться,
+// бомби, підбори, штурхання, детонатор, стіни.
+// Активна бомба { b (запис події), i (клітинка), te (вибух; Infinity — бомба з детонатором, ще не підірвана),
+//   d (котиться в напрямі d; 0 — стоїть), at (коли вона в центрі клітинки i; котиться — і час наступного кроку),
+//   from (клітинка, звідки докочується до i) }
 export class Board {
   constructor(map, t0) {
     this.map = map;
@@ -204,18 +222,20 @@ export class Board {
     this.order = spiral(map);
     this.wallAt = new Float64Array(map.GW * map.GH).fill(Infinity);
     this.order.forEach((i, k) => { this.wallAt[i] = this.sdAt + k * sd.step; });
-    this.bombs = new Map();          // усі відомі бомби раунду: ключ → { o, n, x, y, t, p, h }
+    this.bombs = new Map();          // усі відомі бомби раунду: ключ → { o, n, x, y, t, p, rc, h }
     this.maxN = [];                  // найбільший відомий номер бомби слоту — бот продовжує з нього
     this.picks = new Map();          // усі підбори: ключ → { o, x, y, t }
+    this.kicks = new Map();          // усі штурхання: ключ → { o, x, y, d, t }
+    this.dets = new Map();           // усі підриви детонатором: ключ → { o, n, b, t }
     this.base = { cell: map.cell, item: map.item, shown: new Uint8Array(map.cell.length), T: -Infinity, active: [] };
     this.onBlast = null;             // (bomb) — вибух при «живій» обробці (не при перерахунку), для звуку
     this.blasted = new Set();        // ключі бомб, що вже вибухали «наживо»
     this.reset();
   }
 
-  // Знімок хоста для глядача, що зайшов посеред раунду: клітинки (див. snapshot), активні бомби, час знімка
+  // Знімок хоста для глядача, що зайшов посеред раунду: клітинки (див. snapshot), активні бомби (див. activeList), час знімка
   setBase(bytes, active, T) {
-    const n = this.map.cell.length;
+    const n = this.map.cell.length, GW = this.map.GW;
     if (bytes.length !== n) return false;
     const cell = new Uint8Array(n), item = new Uint8Array(n), shown = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
@@ -224,8 +244,14 @@ export class Board {
       shown[i] = (bytes[i] >> 5) & 1;
       if (this.map.cell[i] === PILLAR) cell[i] = PILLAR;
     }
-    this.base = { cell, item, shown, T, active: active.map(b => ({ ...b })) };
-    for (const b of active) if (!this.bombs.has(bombKey(b))) this.bombs.set(bombKey(b), bombRec(b));
+    const list = [];
+    for (const e of active) {
+      const k = bombKey(e);
+      if (!this.bombs.has(k)) this.bombs.set(k, bombRec(e));
+      const i = e.cy * GW + e.cx, d = e.d > 4 ? 0 : e.d;
+      list.push({ b: this.bombs.get(k), i, d, at: e.at, from: d ? i - DX[d] - DY[d] * GW : i });
+    }
+    this.base = { cell, item, shown, T, active: list };
     this.reset();
     return true;
   }
@@ -237,21 +263,22 @@ export class Board {
     this.shown = Uint8Array.from(b.shown);
     this.fireUntil = new Float64Array(n);
     this.burn = new Map();           // клітинка → коли догорить блок
-    this.active = new Map();         // клітинка → { b, i, te }
+    this.active = new Map();         // клітинка → активна бомба (див. вище)
     // { cells: [[клітинка, вид, напрям]], t0, t1, o }; вид: 0 центр, 1 промінь, 2 кінець, 9 блок, 10 бомба, 11 бонус
     this.flames = [];
     this.T = b.T;
     this.dirty = false;
     this.live = false;
     const inBase = new Set();
-    for (const bb of b.active) {
-      const i = bb.y * this.map.GW + bb.x;
-      this.active.set(i, { b: bb, i, te: bb.t + FUSE_MS });
-      inBase.add(bombKey(bb));
+    for (const e of b.active) {
+      this.active.set(e.i, { b: e.b, i: e.i, te: e.b.rc ? Infinity : e.b.t + FUSE_MS, d: e.d, at: e.at, from: e.from });
+      inBase.add(bombKey(e.b));
     }
     this.queue = [...this.bombs.values()].filter(x => x.t > b.T && !inBase.has(bombKey(x)))
       .sort((x, y) => bombLess(x, y) ? 1 : bombLess(y, x) ? -1 : 0);   // з кінця — найраніша (порівняння — число, не bool!)
-    this.pickQ = [...this.picks.values()].filter(x => x.t > b.T).sort((x, y) => y.t - x.t);
+    this.pickQ = [...this.picks.values()].filter(x => x.t > b.T).sort(byTime);
+    this.kickQ = [...this.kicks.values()].filter(x => x.t > b.T).sort(byTime);
+    this.detQ = [...this.dets.values()].filter(x => x.t > b.T).sort(byTime);
     this.wallK = 0;
     while (this.wallK < this.order.length && this.wallAt[this.order[this.wallK]] <= b.T) {
       this.dropWall(this.order[this.wallK++]);
@@ -274,17 +301,14 @@ export class Board {
     }
     return true;
   }
-  addPick(p) {
-    const k = pickKey(p);
-    if (this.picks.has(k)) return false;
-    const pp = pickRec(p);
-    this.picks.set(k, pp);
-    if (pp.t < this.T) this.dirty = true;
-    else {
-      let j = this.pickQ.length;
-      while (j > 0 && this.pickQ[j - 1].t < pp.t) j--;
-      this.pickQ.splice(j, 0, pp);
-    }
+  addPick(p) { return this.addEvent(this.picks, this.pickQ, pickKey(p), pickRec(p)); }
+  addKick(k) { return this.addEvent(this.kicks, this.kickQ, kickKey(k), kickRec(k)); }
+  addDet(e) { return this.addEvent(this.dets, this.detQ, detKey(e), detRec(e)); }
+  addEvent(all, q, k, e) {
+    if (all.has(k)) return false;
+    all.set(k, e);
+    if (e.t < this.T) this.dirty = true;
+    else enqueue(q, e);
     return true;
   }
 
@@ -300,25 +324,33 @@ export class Board {
     for (;;) {
       let t = Infinity, kind = 0, ref = null;
       for (const a of this.active.values()) {
-        if (a.te < t || (a.te === t && bombLess(a.b, ref.b))) { t = a.te; kind = 1; ref = a; }
+        if (a.te < t || (a.te === t && kind === 1 && bombLess(a.b, ref.b))) { t = a.te; kind = 1; ref = a; }
       }
       for (const [i, until] of this.burn) {
         if (until < t || (until === t && kind === 2 && i < ref)) { t = until; kind = 2; ref = i; }
       }
+      for (const a of this.active.values()) {
+        if (a.d && (a.at < t || (a.at === t && kind === 3 && bombLess(a.b, ref.b)))) { t = a.at; kind = 3; ref = a; }
+      }
       const q = this.queue[this.queue.length - 1];
-      if (q && q.t < t) { t = q.t; kind = 3; ref = q; }
-      const pk = this.pickQ[this.pickQ.length - 1];
-      if (pk && pk.t < t) { t = pk.t; kind = 4; ref = pk; }
+      if (q && q.t < t) { t = q.t; kind = 4; ref = q; }
+      for (const [k, Q] of [[5, this.pickQ], [6, this.kickQ], [7, this.detQ]]) {
+        const e = Q[Q.length - 1];
+        if (e && e.t < t) { t = e.t; kind = k; ref = e; }
+      }
       if (this.wallK < this.order.length) {
         const wt = this.wallAt[this.order[this.wallK]];
-        if (wt < t) { t = wt; kind = 5; ref = this.order[this.wallK]; }
+        if (wt < t) { t = wt; kind = 8; ref = this.order[this.wallK]; }
       }
       if (t > T || !kind) return;
       if (t > this.T) this.T = t;
       if (kind === 1) this.explode(ref, t);
       else if (kind === 2) this.burnOut(ref);
-      else if (kind === 3) { this.queue.pop(); this.place(ref); }
-      else if (kind === 4) { this.pickQ.pop(); this.pick(ref); }
+      else if (kind === 3) this.roll(ref, t);
+      else if (kind === 4) { this.queue.pop(); this.place(ref); }
+      else if (kind === 5) { this.pickQ.pop(); this.pick(ref); }
+      else if (kind === 6) { this.kickQ.pop(); this.kick(ref); }
+      else if (kind === 7) { this.detQ.pop(); this.det(ref); }
       else { this.wallK++; this.dropWall(ref); }
     }
   }
@@ -326,11 +358,35 @@ export class Board {
   place(b) {
     const i = b.y * this.map.GW + b.x;
     if (this.cell[i] !== EMPTY || this.active.has(i)) return;    // зайнято (інша бомба раніше, стіна) — бомби немає
-    this.active.set(i, { b, i, te: this.fireUntil[i] > b.t ? b.t : b.t + FUSE_MS });   // у вогонь — одразу вибух
+    const te = this.fireUntil[i] > b.t ? b.t : b.rc ? Infinity : b.t + FUSE_MS;   // у вогонь — одразу вибух
+    this.active.set(i, { b, i, te, d: 0, at: b.t, from: i });
+  }
+  // Штурхнули: бомба, що стоїть у клітинці, котиться, доки попереду вільно (rollable)
+  kick(k) {
+    const a = this.active.get(k.y * this.map.GW + k.x);
+    if (!a || a.d) return;
+    a.d = k.d; a.at = k.t; a.from = a.i;
+  }
+  // Крок бомби, що котиться: у вільну клітинку — одразу (докочується за ROLL_MS), у вогонь — вибух; глухо — зупинилась
+  roll(a, t) {
+    const j = a.i + DX[a.d] + DY[a.d] * this.map.GW;
+    if (!this.rollable(j)) { a.d = 0; a.from = a.i; return; }
+    this.active.delete(a.i);
+    a.from = a.i; a.i = j; a.at = t + ROLL_MS;
+    this.active.set(j, a);
+    if (this.fireUntil[j] > t && t < a.te) a.te = t;
+  }
+  // Куди може закотитися бомба: порожньо, без бомби й бонуса (гравці й монстри не зупиняють — їх поле не знає)
+  rollable(j) { return this.cell[j] === EMPTY && !this.active.has(j) && !this.shown[j]; }
+  // Детонатор: бомба (o, n, b) вибухає в момент t (якщо ще не вибухла раніше)
+  det(e) {
+    for (const a of this.active.values()) {
+      if (a.b.o === e.o && a.b.n === e.n && a.b.t === e.b) { if (e.t < a.te) a.te = e.t; return; }
+    }
   }
 
   explode(a, t) {
-    const { GW } = this.map, x = a.b.x, y = a.b.y;
+    const { GW } = this.map, x = a.i % GW, y = (a.i - x) / GW;
     this.active.delete(a.i);
     const cells = [[a.i, 0, 0]];                                   // [клітинка, вид, напрям]
     this.hit(a.i, t);
@@ -411,6 +467,10 @@ export class Board {
   bombAt(i) { return this.active.get(i)?.b || null; }
   itemAt(i) { return this.shown[i] ? this.item[i] : 0; }
   activeOf(o) { let n = 0; for (const a of this.active.values()) if (a.b.o === o) n++; return n; }
+  // Бомби слоту з детонатором, ще не підірвані, — від найстаршої
+  remoteOf(o) {
+    return [...this.active.values()].filter(a => a.b.o === o && a.te === Infinity).sort((x, y) => bombLess(x.b, y.b) ? -1 : 1);
+  }
   sdStarted(T = this.T) { return T >= this.sdAt; }
 
   // Знімок для глядачів: на клітинку байт — вид (2 біти), бонус (3 біти), бонус видно (1 біт); блок, що горить, — уже порожньо
@@ -423,40 +483,68 @@ export class Board {
     }
     return out;
   }
-  activeList() { return [...this.active.values()].map(a => a.b); }
+  // Активні бомби для знімка: запис події і де вона зараз (cx, cy), куди котиться (d) і коли там буде (at)
+  activeList() {
+    const GW = this.map.GW;
+    return [...this.active.values()].map(a => ({ ...a.b, cx: a.i % GW, cy: Math.floor(a.i / GW), d: a.d, at: a.at }));
+  }
   // Прибрати події, яких немає в хоста (відрізаний пристрій на мить сам вів ботів): keep(подія) → false — прибрати
-  dropEvents(keepBomb, keepPick) {
+  dropEvents(keepBomb, keepPick, keepKick = () => true, keepDet = () => true) {
     let n = 0;
-    for (const [k, b] of this.bombs) if (!keepBomb(b)) { this.bombs.delete(k); n++; }
-    for (const [k, p] of this.picks) if (!keepPick(p)) { this.picks.delete(k); n++; }
+    for (const [all, keep] of [[this.bombs, keepBomb], [this.picks, keepPick], [this.kicks, keepKick], [this.dets, keepDet]]) {
+      for (const [k, e] of all) if (!keep(e)) { all.delete(k); n++; }
+    }
     if (n) this.dirty = true;
     return n;
   }
-  // Контрольна сума подій (бомби й підбори) з часом ≤ T: кількість і сума хешів
+  // Контрольна сума подій (бомби, підбори, штурхання, детонатор) з часом ≤ T: кількість і сума хешів
   digest(T) {
     let n = 0, h = 0;
-    for (const e of this.bombs.values()) if (e.t <= T) { n++; h = (h + e.h) >>> 0; }
-    for (const e of this.picks.values()) if (e.t <= T) { n++; h = (h + e.h) >>> 0; }
+    for (const all of [this.bombs, this.picks, this.kicks, this.dets]) {
+      for (const e of all.values()) if (e.t <= T) { n++; h = (h + e.h) >>> 0; }
+    }
     return { n, h };
   }
 
-  // Небезпека для ботів і монстрів: коли (найраніше) в клітинці буде новий вогонь від уже поставлених бомб (з ланцюжками
-  // й стінами) протягом horizon мс; Infinity — безпечно. Вогонь, що горить зараз, — fireAt/fireUntil: якби він теж ішов
-  // сюди, наступний вибух у тій самій клітинці загубився б, і бот ішов би туди, «бо вже відгоріло». З тієї ж причини
-  // d.last — коли в клітинці останній вибух (−Infinity — немає): пройти «після вогню» можна лише після нього. Рахується на копії поля.
-  // skip(бомба) → true — без цієї бомби (бот її ще не помітив)
-  danger(horizon = FUSE_MS + FLAME_MS, skip = null) {
+  // Небезпека для ботів і монстрів: коли (найраніше) в клітинці буде новий вогонь від уже поставлених бомб (з ланцюжками,
+  // штурханими бомбами й стінами) протягом horizon мс; Infinity — безпечно. Вогонь, що горить зараз, — fireAt/fireUntil: якби
+  // він теж ішов сюди, наступний вибух у тій самій клітинці загубився б, і бот ішов би туди, «бо вже відгоріло». З тієї ж
+  // причини d.last — коли в клітинці останній вибух (−Infinity — немає): пройти «після вогню» можна лише після нього.
+  // Рахується на копії поля. skip(бомба) → true — без цієї бомби (бот її ще не помітив).
+  // Бомба з детонатором, ще не підірвана, для ботів (remote) — вибухне будь-якої миті: d — не пізніше, ніж за REMOTE_ESCAPE
+  // (стільки є, щоб вибратися з її вогню) і не раніше, ніж минув би запал; last — Infinity («після вогню» там не пройти);
+  // d.any[i] = 1 — клітинка під такою бомбою: заходити туди ззовні не можна (див. canEnter у bots.js).
+  // Для монстрів (remote = false) — не вибухне, поки не підірвуть: вони не знають коли.
+  danger(horizon = FUSE_MS + FLAME_MS, skip = null, remote = true) {
     const n = this.cell.length, d = new Float64Array(n).fill(Infinity), last = new Float64Array(n).fill(-Infinity);
+    const anyCell = new Uint8Array(n);
     const c = Object.create(Board.prototype);
+    const active = new Map();
+    for (const [i, a] of this.active) {
+      if (skip && skip(a.b)) continue;
+      const any = remote && a.te === Infinity;
+      active.set(i, { ...a, te: any ? Math.max(a.b.t + FUSE_MS, this.T + REMOTE_ESCAPE) : a.te, any });
+    }
     Object.assign(c, this, {
       cell: Uint8Array.from(this.cell), item: Uint8Array.from(this.item), shown: Uint8Array.from(this.shown),
       fireUntil: Float64Array.from(this.fireUntil), burn: new Map(this.burn), flames: [], live: false,
-      active: new Map([...this.active].filter(([, a]) => !skip || !skip(a.b)).map(([i, a]) => [i, { ...a }])), queue: [], pickQ: [],
+      active, queue: [], pickQ: [], kickQ: [], detQ: this.detQ.slice(),
     });
-    c.hit = (i, t) => { if (t < d[i]) d[i] = t; if (t > last[i]) last[i] = t; };
+    let any = false;
+    c.explode = (a, t) => {
+      any = a.any;
+      Board.prototype.explode.call(c, a, t);
+      if (any) for (const o of c.active.values()) if (o.te === t) o.any = true;   // ланцюжок від неї — теж будь-якої миті
+      any = false;
+    };
+    c.hit = (i, t) => {
+      if (t < d[i]) d[i] = t;
+      if (any) { last[i] = Infinity; anyCell[i] = 1; } else if (t > last[i]) last[i] = t;
+    };
     c.dropWall = (i) => { if (c.wallAt[i] < d[i]) d[i] = c.wallAt[i]; Board.prototype.dropWall.call(c, i); };
     c.run(this.T + horizon);
     d.last = last;
+    d.any = anyCell;
     return d;
   }
 }

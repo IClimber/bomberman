@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   makeMap, Board, moveActor, spiral, suddenDeath, canPlace, mulberry32,
-  EMPTY, PILLAR, BLOCK, WALL, FUSE_MS, FLAME_MS, SIZES,
+  EMPTY, PILLAR, BLOCK, WALL, FUSE_MS, FLAME_MS, ROLL_MS, REMOTE_ESCAPE, SIZES,
 } from '../js/sim.js';
 
 // Порожня карта 13×11 (лише рамка і стовпи) — щоб вибухи було легко передбачити
@@ -269,7 +269,12 @@ test('детермінізм: багато подій у випадковому 
       const x = 1 + Math.floor(rnd() * m.w), y = 1 + Math.floor(rnd() * m.h);
       evs.push({ kind: 'p', e: { o: k % 4, x, y, t: Math.floor(rnd() * 40000) } });
     }
-    const add = (bd, ev) => ev.kind === 'b' ? bd.addBomb(ev.e) : bd.addPick(ev.e);
+    for (let k = 0; k < 30; k++) {                                // штурхання (частина — у порожнечу) і детонатор
+      const b = evs[Math.floor(rnd() * 20)].e, t = b.t + Math.floor(rnd() * 3000);
+      if (k % 2) evs.push({ kind: 'k', e: { o: k % 4, x: b.x, y: b.y, d: 1 + Math.floor(rnd() * 4), t } });
+      else { b.rc = true; evs.push({ kind: 'd', e: { o: b.o, n: b.n, b: b.t, t } }); }
+    }
+    const add = (bd, ev) => ev.kind === 'b' ? bd.addBomb(ev.e) : ev.kind === 'p' ? bd.addPick(ev.e) : ev.kind === 'k' ? bd.addKick(ev.e) : bd.addDet(ev.e);
     const ref = new Board(m, 0);
     for (const ev of [...evs].sort((a, b) => a.e.t - b.e.t)) { ref.advance(ev.e.t - 1); add(ref, ev); }
     ref.advance(60000);
@@ -299,4 +304,120 @@ test('бомби з тим самим номером, але різним час
   b.advance(500);
   assert.equal(b.active.size, 1);
   assert.equal(b.digest(1000).n, 1);
+});
+
+test('штурхання: бомба котиться клітинка за ROLL_MS, доки попереду вільно; вибух — де зупинилась', () => {
+  const m = emptyMap();
+  const b = new Board(m, 0);
+  b.addBomb({ o: 0, n: 1, x: 3, y: 1, t: 0, p: 2 });
+  b.addKick({ o: 1, x: 3, y: 1, d: 2, t: 500 });
+  b.advance(500);
+  assert.ok(b.bombAt(at(m, 4, 1)) && !b.bombAt(at(m, 3, 1)));   // одразу займає наступну клітинку
+  b.advance(500 + 5 * ROLL_MS);
+  assert.ok(b.bombAt(at(m, 9, 1)));
+  b.advance(2000);
+  const a = b.active.get(at(m, 13, 1));                         // уперлась у рамку
+  assert.ok(a && a.d === 0 && a.from === a.i);
+  b.addKick({ o: 1, x: 13, y: 1, d: 2, t: 2100 });              // у стіну — нікуди
+  b.advance(2200);
+  assert.ok(b.bombAt(at(m, 13, 1)));
+  b.advance(FUSE_MS);
+  assert.ok(b.fireAt(at(m, 11, 1)) && b.fireAt(at(m, 13, 3)) && !b.fireAt(at(m, 3, 1)));
+  assert.equal(b.fireBy(at(m, 12, 1)), 0);                      // вогонь — власника бомби, не того, хто штурхнув
+});
+
+test('штурхання: зупиняють блок, бонус, інша бомба; штурхнути можна лише бомбу, що стоїть; у вогонь — вибух', () => {
+  const m = emptyMap();
+  m.cell[at(m, 7, 1)] = BLOCK;
+  m.item[at(m, 1, 7)] = 2;
+  const b = new Board(m, 0);
+  b.base.shown[at(m, 1, 7)] = 1;                                // бонус, що вже видно
+  b.reset();
+  b.addBomb({ o: 0, n: 1, x: 3, y: 1, t: 0, p: 1 });
+  b.addBomb({ o: 0, n: 2, x: 1, y: 3, t: 0, p: 1 });
+  b.addBomb({ o: 1, n: 1, x: 9, y: 3, t: 0, p: 1 });
+  b.addBomb({ o: 1, n: 2, x: 4, y: 3, t: 0, p: 1 });
+  b.addKick({ o: 1, x: 3, y: 1, d: 2, t: 100 });
+  b.addKick({ o: 1, x: 4, y: 1, d: 4, t: 150 });                // уже котиться — не зважаємо
+  b.addKick({ o: 1, x: 4, y: 3, d: 2, t: 100 });
+  b.addKick({ o: 1, x: 1, y: 3, d: 3, t: 100 });
+  b.addKick({ o: 1, x: 5, y: 5, d: 2, t: 100 });                // там немає бомби
+  b.advance(1200);
+  assert.ok(b.bombAt(at(m, 6, 1)));                             // перед блоком
+  assert.ok(b.bombAt(at(m, 8, 3)));                             // перед іншою бомбою
+  assert.ok(b.bombAt(at(m, 1, 6)));                             // перед бонусом
+  assert.equal(b.active.size, 4);
+  const roll = new Board(m, 0);                                 // у клітинку, що горить, — вибух одразу
+  roll.addBomb({ o: 0, n: 1, x: 5, y: 1, t: 0, p: 1 });
+  roll.addBomb({ o: 1, n: 1, x: 9, y: 1, t: 200, p: 1 });
+  roll.addKick({ o: 2, x: 9, y: 1, d: 4, t: FUSE_MS + 50 });     // (6, 1) горить до 3000
+  roll.advance(FUSE_MS + 50 + 3 * ROLL_MS);
+  assert.equal(roll.active.size, 0);
+  assert.ok(roll.fireAt(at(m, 7, 1)) && roll.fireBy(at(m, 7, 1)) === 1);
+});
+
+test('детонатор: бомба не вибухає сама, лише від підриву (зокрема майбутнього) чи чужого вогню', () => {
+  const m = emptyMap();
+  const b = new Board(m, 0);
+  b.addBomb({ o: 0, n: 1, x: 3, y: 1, t: 0, p: 2, rc: true });
+  b.addBomb({ o: 0, n: 2, x: 7, y: 1, t: 100, p: 1, rc: true });
+  b.addBomb({ o: 0, n: 3, x: 1, y: 9, t: 100, p: 1, rc: true });
+  b.advance(10000);
+  assert.equal(b.active.size, 3);
+  assert.deepEqual(b.remoteOf(0).map(a => a.b.n), [1, 2, 3]);
+  b.addDet({ o: 0, n: 2, b: 100, t: 10000 });
+  b.advance(10000);
+  assert.ok(b.fireAt(at(m, 7, 1)) && b.fireAt(at(m, 6, 1)) && !b.fireAt(at(m, 4, 1)));
+  b.addBomb({ o: 1, n: 1, x: 3, y: 3, t: 11000, p: 2 });        // звичайна підірве бомбу з детонатором
+  b.advance(11000 + FUSE_MS);
+  assert.ok(!b.bombAt(at(m, 3, 1)) && b.fireAt(at(m, 5, 1)));
+  b.addDet({ o: 0, n: 3, b: 100, t: 20000 });                   // загинув — вибухне за запал від смерті
+  b.advance(19999);
+  assert.ok(b.bombAt(at(m, 1, 9)));
+  b.advance(20000);
+  assert.ok(!b.bombAt(at(m, 1, 9)));
+  assert.equal(b.digest(30000).n, 6);
+  const late = new Board(m, 0);                                 // підрив, що прийшов пізно, — перерахунок
+  late.addBomb({ o: 0, n: 1, x: 3, y: 1, t: 0, p: 2, rc: true });
+  late.advance(5000);
+  late.addDet({ o: 0, n: 1, b: 0, t: 4000 });
+  late.advance(5000);
+  assert.ok(!late.bombAt(at(m, 3, 1)) && late.cell[at(m, 3, 1)] === EMPTY);
+});
+
+test('небезпека й детонатор: для ботів — будь-якої миті (з часом, щоб вибратися), для монстрів — ні', () => {
+  const m = emptyMap();
+  const b = new Board(m, 0);
+  b.addBomb({ o: 0, n: 1, x: 3, y: 1, t: 0, p: 2, rc: true });
+  b.advance(500);
+  let d = b.danger();
+  assert.equal(d[at(m, 4, 1)], FUSE_MS);                         // поки не минув би запал — як звичайна
+  assert.equal(d.last[at(m, 4, 1)], Infinity);                  // «після вогню» не пройти
+  assert.ok(d.any[at(m, 4, 1)] && d.any[at(m, 3, 1)] && !d.any[at(m, 6, 1)]);
+  b.advance(6000);
+  d = b.danger();
+  assert.equal(d[at(m, 4, 1)], 6000 + REMOTE_ESCAPE);
+  assert.equal(b.danger(undefined, null, false)[at(m, 4, 1)], Infinity);
+  b.addDet({ o: 0, n: 1, b: 0, t: 7000 });
+  assert.equal(b.danger(undefined, null, false)[at(m, 4, 1)], 7000);
+  assert.equal(b.active.size, 1);
+});
+
+test('знімок для глядача: бомба, що котиться, і бомба з детонатором', () => {
+  const m = emptyMap();
+  const host = new Board(m, 0);
+  host.addBomb({ o: 0, n: 1, x: 1, y: 1, t: 0, p: 2 });
+  host.addBomb({ o: 1, n: 1, x: 1, y: 5, t: 0, p: 1, rc: true });
+  host.addKick({ o: 2, x: 1, y: 1, d: 2, t: 300 });
+  host.advance(300 + 2.5 * ROLL_MS);
+  const late = new Board(m, 0);
+  assert.ok(late.setBase(host.snapshot(), host.activeList(), host.T));
+  const e = { o: 1, n: 1, b: 0, t: 5000 };
+  host.addDet(e); late.addDet(e);
+  for (const T of [1500, 2600, 5000, 6000]) {
+    host.advance(T); late.advance(T);
+    assert.deepEqual([...late.active.keys()], [...host.active.keys()], `T ${T}`);
+    assert.deepEqual(late.snapshot(), host.snapshot(), `T ${T}`);
+  }
+  assert.equal(late.fireUntil[at(m, 1, 6)], host.fireUntil[at(m, 1, 6)]);
 });

@@ -183,3 +183,46 @@ export function ghostPath(g, s, wob, w = 0.3) {
   }
   g.closePath();
 }
+
+// Бонус «штурхання»: черевик носком праворуч і бомбочка перед ним (boot — черевик, sole — підошва, ball — бомбочка)
+export function bootPath(g, cx, cy, s) {
+  g.beginPath();
+  g.moveTo(cx - s * 0.3, cy - s * 0.26);
+  g.lineTo(cx - s * 0.1, cy - s * 0.26);
+  g.lineTo(cx - s * 0.1, cy - s * 0.03);
+  g.quadraticCurveTo(cx + s * 0.07, cy - s * 0.03, cx + s * 0.1, cy + s * 0.1);
+  g.lineTo(cx + s * 0.1, cy + s * 0.18);
+  g.lineTo(cx - s * 0.3, cy + s * 0.18);
+  g.closePath();
+}
+export function kickIcon(g, cx, cy, s, boot = '#f4f4f4', sole = '#3a2a1a', ball = '#1c1f2a') {
+  bootPath(g, cx, cy, s);
+  g.fillStyle = boot; g.fill();
+  g.fillStyle = sole; g.fillRect(cx - s * 0.3, cy + s * 0.13, s * 0.4, s * 0.07);
+  g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(cx - s * 0.3, cy - s * 0.26, s * 0.2, s * 0.05);
+  circle(g, cx + s * 0.22, cy + s * 0.09, s * 0.1, ball);
+  circle(g, cx + s * 0.19, cy + s * 0.06, s * 0.03, 'rgba(255,255,255,0.6)');
+  line(g, cx + s * 0.2, cy - s * 0.12, cx + s * 0.3, cy - s * 0.2, s * 0.03, boot);          // «удар»
+  line(g, cx + s * 0.27, cy - s * 0.04, cx + s * 0.36, cy - s * 0.08, s * 0.03, boot);
+}
+// Бонус «детонатор»: пульт з антеною, червона кнопка, хвилі (box — корпус, btn — кнопка, wave — антена й хвилі)
+export function remotePath(g, cx, cy, s) { rr(g, cx - s * 0.17, cy - s * 0.04, s * 0.32, s * 0.3, s * 0.05); }
+export function remoteIcon(g, cx, cy, s, box = '#3a4256', btn = '#e53935', wave = '#ffd23f') {
+  line(g, cx + s * 0.08, cy - s * 0.02, cx + s * 0.14, cy - s * 0.26, s * 0.035, '#c8ccd6');
+  circle(g, cx + s * 0.14, cy - s * 0.27, s * 0.04, wave);
+  g.strokeStyle = wave; g.lineWidth = Math.max(1, s * 0.03); g.lineCap = 'round';
+  for (const r of [0.09, 0.15]) { g.beginPath(); g.arc(cx + s * 0.14, cy - s * 0.27, s * r, -1.2, 0.2); g.stroke(); }
+  remotePath(g, cx, cy, s);
+  g.fillStyle = box; g.fill();
+  circle(g, cx - s * 0.01, cy + s * 0.11, s * 0.085, btn);
+  circle(g, cx - s * 0.035, cy + s * 0.085, s * 0.03, 'rgba(255,255,255,0.55)');
+}
+// Бомба з детонатором (поверх бомби будь-якого стилю): антенка з вогником, що блимає
+export function remoteMark(g, x, y, s, T) {
+  const ax = x + s * 0.3, ay = y + s * 0.42, tx = ax - s * 0.12, ty = ay - s * 0.3, on = Math.floor(T / 300) % 2;
+  line(g, ax, ay, tx, ty, Math.max(1, s * 0.045), '#e4e8f0');
+  if (on) circle(g, tx, ty, s * 0.11, 'rgba(255,59,48,0.35)');
+  circle(g, tx, ty, s * 0.065, on ? '#ff3b30' : '#8a1a14');
+  g.fillStyle = '#2a2f3d'; rr(g, ax - s * 0.08, ay - s * 0.05, s * 0.16, s * 0.12, s * 0.03); g.fill();
+  circle(g, ax, ay + s * 0.01, s * 0.025, on ? '#7dff5a' : '#2f6b2a');
+}

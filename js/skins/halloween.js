@@ -1,7 +1,7 @@
 // halloween.js — «Хелловін»: цвинтар уночі, надгробки замість стовпів, мур склепу, гарбузи й труни,
 // стіна з черепом; відьми й чаклуни в капелюхах кольору гравця; скелети, кажани, привиди; зелений відьмин вогонь.
-import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, mulberry32 } from '../sim.js';
-import { TAU, rr, bevel, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, spark, flameShape, ghostPath } from './common.js';
+import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE, mulberry32 } from '../sim.js';
+import { TAU, rr, bevel, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, spark, flameShape, ghostPath, kickIcon } from './common.js';
 
 const BONE = '#e9e3d3', ORANGE = '#ff8a1f';
 
@@ -155,6 +155,14 @@ function item(g, k, s) {
     g.fillStyle = '#8a5a33'; g.fillRect(cx - s * 0.07, cy - s * 0.26, s * 0.14, s * 0.07);
     circle(g, cx - s * 0.05, cy + s * 0.1, s * 0.03, '#d4ffc4');
     circle(g, cx + s * 0.06, cy + s * 0.04, s * 0.02, '#d4ffc4');
+  } else if (k === IT_KICK) kickIcon(g, cx, cy, s, '#6a4a8a', '#1a1022', ORANGE);   // чобіт відьми й гарбузик
+  else if (k === IT_REMOTE) {                                      // кришталева куля
+    ellipse(g, cx, cy + s * 0.22, s * 0.16, s * 0.05, '#5a3a1f');
+    g.fillStyle = '#7a4a24'; g.fillRect(cx - s * 0.12, cy + s * 0.12, s * 0.24, s * 0.1);
+    const grd = g.createRadialGradient(cx - s * 0.06, cy - s * 0.08, s * 0.02, cx, cy - s * 0.02, s * 0.2);
+    grd.addColorStop(0, '#f4d9ff'); grd.addColorStop(0.5, '#b25cff'); grd.addColorStop(1, '#4a1a7a');
+    g.fillStyle = grd; g.beginPath(); g.arc(cx, cy - s * 0.02, s * 0.2, 0, TAU); g.fill();
+    circle(g, cx + s * 0.04, cy, s * 0.04, '#7dff5a');
   }
 }
 function skullBomb(g, cx, cy, r, red) {
@@ -245,7 +253,7 @@ export default {
   name: 'Хелловін',
   bg: '#0d0814',
   backdrop,
-  emoji: { bomb: '💣', fire: '🕯️', speed: '🧹', pass: '👻', resist: '🧪' },
+  emoji: { bomb: '💣', fire: '🕯️', speed: '🧹', pass: '👻', resist: '🧪', kick: '👢', remote: '🔮' },
   fire: ['#2fae3a', '#9dff4a', '#f2ffd6'],
   burn: ['#58d63a', 'rgba(157,255,74,0)'],
   blocks: 3,

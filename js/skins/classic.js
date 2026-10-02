@@ -1,6 +1,6 @@
 // classic.js — стиль «За замовчуванням»: зелене поле, сірі стовпи, цегла, бомбермени в шоломах.
-import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST } from '../sim.js';
-import { TAU, rr, bevel, shade, flameShape, bombShape, spark, bombBeat, bombFlash, pillarShade } from './common.js';
+import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE } from '../sim.js';
+import { TAU, rr, bevel, shade, flameShape, bombShape, spark, bombBeat, bombFlash, pillarShade, kickIcon, remoteIcon } from './common.js';
 
 const C = {
   floorA: '#3d8a47', floorB: '#398342', floorShadow: 'rgba(0,0,0,0.22)',
@@ -61,7 +61,7 @@ function wall(g, s) {
 }
 
 // Бонуси: кольорова плитка з піктограмою
-const ITEM_BG = { [IT_BOMB]: '#2f6fd6', [IT_FIRE]: '#d9412b', [IT_SPEED]: '#7a3fd0', [IT_PASS]: '#16a39a', [IT_RESIST]: '#d9a21b' };
+const ITEM_BG = { [IT_BOMB]: '#2f6fd6', [IT_FIRE]: '#d9412b', [IT_SPEED]: '#7a3fd0', [IT_PASS]: '#16a39a', [IT_RESIST]: '#d9a21b', [IT_KICK]: '#2f9e44', [IT_REMOTE]: '#c2185b' };
 export function itemTile(g, s, bg, edge = 'rgba(255,255,255,0.55)') {
   const p = s * 0.1;
   g.fillStyle = 'rgba(0,0,0,0.3)';
@@ -99,7 +99,8 @@ function item(g, k, s) {
     g.moveTo(cx, cy - s * 0.28); g.lineTo(cx + s * 0.24, cy - s * 0.18); g.quadraticCurveTo(cx + s * 0.22, cy + s * 0.16, cx, cy + s * 0.3);
     g.quadraticCurveTo(cx - s * 0.22, cy + s * 0.16, cx - s * 0.24, cy - s * 0.18); g.closePath(); g.fill();
     flameShape(g, cx, cy + s * 0.02, s * 0.13, '#e2571e');
-  }
+  } else if (k === IT_KICK) kickIcon(g, cx, cy, s, '#fff6d0', '#5a3a1f');
+  else if (k === IT_REMOTE) remoteIcon(g, cx, cy, s);
 }
 
 function bomb(g, x, y, s, k, T) {
@@ -211,7 +212,7 @@ export function eyes(g, m, s, eyeY, white = '#fff', pupil = '#16131f', gap = 0.1
 export default {
   name: 'За замовчуванням',
   bg: '#141722',
-  emoji: { bomb: '💣', fire: '🔥', speed: '👟', pass: '👻', resist: '🛡' },
+  emoji: { bomb: '💣', fire: '🔥', speed: '👟', pass: '👻', resist: '🛡', kick: '🥾', remote: '📡' },
   fire: ['#ff6a1a', '#ffc533', '#fff6c8'],
   burn: ['#ff6a00', 'rgba(255,220,80,0)'],
   floor, stone, block, wall, item, bomb, player, monster,

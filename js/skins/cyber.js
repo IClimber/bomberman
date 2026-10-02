@@ -1,7 +1,7 @@
 // cyber.js — «Кіберпанк»: темна підлога з неоновою сіткою й доріжками мікросхем, стовпи з рожевим неоном,
 // ящики-голограми й сервери, «файрвол» замість стін; гравці в шоломах з візором, дрони, павуки-боти, глітч-привиди.
-import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST } from '../sim.js';
-import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, pix, ghostPath } from './common.js';
+import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE } from '../sim.js';
+import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, pix, ghostPath, bootPath, remotePath } from './common.js';
 
 const CY = '#2bf3ff', MG = '#ff2bd6', RED = '#ff2b4a';
 
@@ -80,7 +80,7 @@ function wall(g, s) {
 }
 
 // Бонуси: темна плитка з неоновою рамкою і неоновою піктограмою
-const NEON = { [IT_BOMB]: CY, [IT_FIRE]: '#ff8a2b', [IT_SPEED]: '#ffe23d', [IT_PASS]: '#3dff8a', [IT_RESIST]: '#6b9bff' };
+const NEON = { [IT_BOMB]: CY, [IT_FIRE]: '#ff8a2b', [IT_SPEED]: '#ffe23d', [IT_PASS]: '#3dff8a', [IT_RESIST]: '#6b9bff', [IT_KICK]: '#c6ff3d', [IT_REMOTE]: '#ff4d6d' };
 const INVADER = [
   '..K.....K..',
   '...K...K...',
@@ -125,6 +125,14 @@ function item(g, k, s) {
     g.moveTo(cx, cy - s * 0.27); g.lineTo(cx + s * 0.22, cy - s * 0.17); g.quadraticCurveTo(cx + s * 0.2, cy + s * 0.15, cx, cy + s * 0.28);
     g.quadraticCurveTo(cx - s * 0.2, cy + s * 0.15, cx - s * 0.22, cy - s * 0.17); g.closePath(); g.fill(); g.stroke();
     g.beginPath(); g.moveTo(cx - s * 0.08, cy); g.lineTo(cx - s * 0.01, cy + s * 0.08); g.lineTo(cx + s * 0.1, cy - s * 0.07); g.stroke();
+  } else if (k === IT_KICK) {
+    bootPath(g, cx - s * 0.03, cy, s); g.fill(); g.stroke();
+    g.beginPath(); g.arc(cx + s * 0.2, cy + s * 0.09, s * 0.09, 0, TAU); g.fill(); g.stroke();
+  } else if (k === IT_REMOTE) {
+    remotePath(g, cx, cy, s); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(cx + s * 0.08, cy - s * 0.04); g.lineTo(cx + s * 0.14, cy - s * 0.26); g.stroke();
+    for (const r of [0.08, 0.14]) { g.beginPath(); g.arc(cx + s * 0.14, cy - s * 0.27, s * r, -1.2, 0.2); g.stroke(); }
+    circle(g, cx - s * 0.01, cy + s * 0.11, s * 0.06, '#fff');
   }
   g.shadowBlur = 0;
 }
@@ -245,7 +253,7 @@ export default {
   name: 'Кіберпанк',
   bg: '#07040f',
   shadow: 'rgba(255,43,214,0.35)',
-  emoji: { bomb: '💣', fire: '🔥', speed: '⚡', pass: '👾', resist: '🛡' },
+  emoji: { bomb: '💣', fire: '🔥', speed: '⚡', pass: '👾', resist: '🛡', kick: '🦿', remote: '📡' },
   fire: [MG, '#35e8ff', '#f2feff'],
   burn: [MG, 'rgba(53,232,255,0)'],
   blocks: 2,

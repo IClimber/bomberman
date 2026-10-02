@@ -185,17 +185,22 @@
     touch-action: none;
   }
   .bombBtn.pressed { transform: scale(0.93); }
-  .emoBtn {                             /* реакції: над кнопкою бомби, тап — рядок емодзі */
-    position: fixed;
-    right: calc(14px + (var(--btn) - 48px) / 2 + env(safe-area-inset-right));
-    bottom: calc(24px + var(--btn) + 14px + env(safe-area-inset-bottom));
-    width: 48px; height: 48px; min-height: 0; padding: 0; border-radius: 50%;
-    background: #1f2433cc; border: 2px solid #ffffff66; font-size: 24px; line-height: 1; touch-action: none;
+  /* Детонатор (лише з бонусом) і реакції: портрет — ліворуч від бомби, реакції над детонатором; альбом — стовпчиком над бомбою */
+  .detBtn, .emoBtn {
+    position: fixed; min-height: 0; padding: 0; border-radius: 50%; line-height: 1; touch-action: none;
+    right: calc(14px + var(--btn) + 12px + (56px - var(--s)) / 2 + env(safe-area-inset-right));
+    width: var(--s); height: var(--s);
   }
-  .emoBar {
+  .detBtn { --s: 56px; bottom: calc(24px + (var(--btn) - 56px) / 2 + env(safe-area-inset-bottom)); background: #2b6fd9e6; border: 3px solid #ffffff99; font-size: 26px; }
+  .detBtn.pressed { transform: scale(0.93); }
+  .emoBtn { --s: 44px; bottom: calc(24px + (var(--btn) - 56px) / 2 + 66px + env(safe-area-inset-bottom)); background: #1f2433cc; border: 2px solid #ffffff66; font-size: 22px; }
+  @media (orientation: landscape) {
+    .detBtn, .emoBtn { right: calc(14px + (var(--btn) - var(--s)) / 2 + env(safe-area-inset-right)); }
+    .detBtn { bottom: calc(24px + var(--btn) + 12px + env(safe-area-inset-bottom)); }
+    .emoBtn { bottom: calc(24px + var(--btn) + 80px + env(safe-area-inset-bottom)); }
+  }
+  .emoBar {                             /* над кнопкою реакцій, правим краєм до неї (місце — у touch.js) */
     position: fixed; display: none; gap: 6px; padding: 6px; border-radius: 30px; background: #1f2433ee; border: 1px solid var(--line);
-    right: calc(14px + (var(--btn) - 48px) / 2 + 56px + env(safe-area-inset-right));
-    bottom: calc(24px + var(--btn) + 14px + env(safe-area-inset-bottom));
   }
   .emoBar.show { display: flex; }
   .emoBar button { width: 40px; height: 40px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; font-size: 24px; touch-action: none; }
@@ -231,6 +236,7 @@
     <div class="knob" id="knob"></div>
   </div>
   <button class="bombBtn" id="bombBtn" tabindex="-1" aria-label="Бомба">💣</button>
+  <button class="detBtn" id="detBtn" tabindex="-1" aria-label="Детонатор" hidden>📡</button>
   <button class="emoBtn" id="emoBtn" tabindex="-1" aria-label="Реакції">🙂</button>
   <div class="emoBar" id="emoBar"></div>
 </div>

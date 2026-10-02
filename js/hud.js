@@ -67,7 +67,8 @@ const fmt = (ms) => {
 };
 
 // Бонуси гравця — емодзі стилю графіки (e)
-const statsText = (e, nb, fp, sp, ps, rs) => `${e.bomb}${nb} ${e.fire}${fp}${sp ? ` ${e.speed}${sp}` : ''}${ps ? ` ${e.pass}` : ''}${rs ? ` ${e.resist}` : ''}`;
+const statsText = (e, nb, fp, sp, ps, rs, kk, rc) =>
+  `${e.bomb}${nb} ${e.fire}${fp}${sp ? ` ${e.speed}${sp}` : ''}${ps ? ` ${e.pass}` : ''}${kk ? ` ${e.kick}` : ''}${rc ? ` ${e.remote}` : ''}${rs ? ` ${e.resist}` : ''}`;
 const SD_TEXT = 'РАПТОВА СМЕРТЬ';
 function chipEls(items) {
   return items.map(([c, name, stats, alive, me]) => {
@@ -102,9 +103,10 @@ export function renderHud(now) {
   }
   const em = skinOf().emoji;
   if ($('bombBtn').textContent !== em.bomb) $('bombBtn').textContent = em.bomb;
+  if ($('detBtn').textContent !== em.remote) $('detBtn').textContent = em.remote;
   const items = R.sl.map((s, k) => {
     const me = k === S.mySlot;
-    const stats = s.a ? statsText(em, s.nb, s.fp, s.sp, s.ps, me || s.b ? s.rs > now : s.rsOn) : '💀';
+    const stats = s.a ? statsText(em, s.nb, s.fp, s.sp, s.ps, me || s.b ? s.rs > now : s.rsOn, s.kk, s.rc) : '💀';
     return [s.c, `${s.n}${me ? ' (ти)' : ''}`, stats, s.a, me];
   });
   const timer = $('timer');
@@ -112,7 +114,7 @@ export function renderHud(now) {
   if (rk !== reserveKey) {                                           // вимірюємо найгірший випадок; нижче все перемалюється
     reserveKey = rk;
     chipsKey = '';
-    const worst = statsText(em, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS, true, true);
+    const worst = statsText(em, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS, true, true, true, true);
     $('chips').replaceChildren(...chipEls(items.map(([c, name, , , me]) => [c, name, worst, true, me])));
     timer.textContent = SD_TEXT;
     timer.classList.add('sd');

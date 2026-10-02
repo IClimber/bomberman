@@ -1,13 +1,14 @@
 // round.js — раунд без DOM і мережі: слоти, поле, монстри; крок хоста (боти, монстри, смерті, кінець раунду).
 // Слот { o (номер 0–3, місце старту), i (id людини; '' — бот), b (бот), c (колір), n (ім'я), a (живий), dt (коли загинув),
 //   kb (хто вбив, див. KB_*), x, y, dr (напрям), mv (іде), nb (бомб), fp (дальність вогню), sp (бонусів швидкості),
-//   ps (прохід крізь бомби), rs (стійкий до вогню до, спільний час), bn (лічильник своїх бомб) }
+//   ps (прохід крізь бомби), rs (стійкий до вогню до, спільний час), kk (штурхає бомби), rc (детонатор),
+//   bn (лічильник своїх бомб) }
 import {
-  makeMap, Board, MON, WALL, RESIST_MS, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS,
-  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, DX, DY, cellOf,
+  makeMap, Board, MON, WALL, RESIST_MS, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS, FUSE_MS,
+  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE, DX, DY, cellOf,
 } from './sim.js';
 import { monsterStep } from './monsters.js';
-import { botTick, botCanPlace } from './bots.js';
+import { botTick, botCanPlace, botDetonate } from './bots.js';
 
 export const COUNTDOWN_MS = 3000;    // відлік перед раундом
 export const END_GRACE_MS = 400;     // перед підсумком чекаємо dead від тих, хто загинув у тому самому вибуху
@@ -30,7 +31,7 @@ export function newRound({ r, seed, m, s, d, t0, sl }) {
     const [x, y] = map.spawns[k];
     return {
       o: k, i: e.i, b: !!e.b, c: e.c, n: e.n, a: true, dt: 0, kb: KB_NONE, x, y, dr: 3, mv: false,
-      nb: START_BOMBS, fp: START_FIRE, sp: 0, ps: false, rs: 0, bn: 0,
+      nb: START_BOMBS, fp: START_FIRE, sp: 0, ps: false, rs: 0, kk: false, rc: false, bn: 0,
     };
   });
   const mons = map.mons.map(mo => ({ i: mo.i, k: mo.k, x: mo.x, y: mo.y, d: 0, a: true, dt: 0, kb: KB_NONE }));
@@ -43,6 +44,14 @@ export function applyItem(s, kind, now) {
   else if (kind === IT_SPEED) s.sp = Math.min(MAX_SPEED_UPS, s.sp + 1);
   else if (kind === IT_PASS) s.ps = true;
   else if (kind === IT_RESIST) s.rs = now + RESIST_MS;
+  else if (kind === IT_KICK) s.kk = true;
+  else if (kind === IT_REMOTE) s.rc = true;
+}
+
+// Детонатор: загиблий (чи той, хто вийшов) — його бомби, ще не підірвані, вибухнуть за FUSE_MS від смерті.
+// Події det для розсилки (їх шле сам загиблий, за бота чи того, хто вийшов, — хост)
+export function orphanDets(R, o, t) {
+  return R.board.remoteOf(o).map(a => ({ o, n: a.b.n, b: a.b.t, t: t + FUSE_MS }));
 }
 
 // Що вбило б того, хто в точці (x, y): стіна, вогонь (без стійкості), дотик монстра (mons — як їх видно).
@@ -65,7 +74,7 @@ export function kill(R, o, t, kb = KB_NONE) {
   return true;
 }
 
-// Крок хоста. ev: { bomb(b), pick(p), dead(o, t, kb), monster(m) } — що розіслати. Повертає true, якщо щось змінилось.
+// Крок хоста. ev: { bomb(b), pick(p), dead(o, t, kb), det(e), monster(m) } — що розіслати. Повертає true, якщо щось змінилось.
 // Раунд скінчився, а живих людей немає (усі загинули, боти лишились) — боти й монстри грають далі, поки висить підсумок
 // (він уже не змінюється); інакше після кінця все стоїть.
 export function hostStep(R, now, dt, ev) {
@@ -74,9 +83,10 @@ export function hostStep(R, now, dt, ev) {
   B.advance(now);
   let changed = false;
   const targets = R.sl.filter(s => s.a);
-  let dangerCache = null;
+  let dangerCache = null, monDanger = null;
   const danger = () => dangerCache || (dangerCache = B.danger());
-  const mctx = { now, t0: R.t0, diff: R.d, danger };
+  // монстри не знають, коли підірвуть бомбу з детонатором (див. Board.danger)
+  const mctx = { now, t0: R.t0, diff: R.d, danger: () => monDanger || (monDanger = B.danger(undefined, null, false)) };
   for (const m of R.mons) {
     if (!m.a) continue;
     monsterStep(m, dt, B, targets, mctx);
@@ -100,11 +110,20 @@ export function hostStep(R, now, dt, ev) {
     };
     if (botTick(s, dt, ctx) && botCanPlace(s, B)) {
       s.bn = Math.max(s.bn, B.maxN[s.o] || 0) + 1;                // новий хост продовжує нумерацію
-      const b = { o: s.o, n: s.bn, x: Math.round(s.x), y: Math.round(s.y), t: now, p: s.fp };
+      const b = { o: s.o, n: s.bn, x: Math.round(s.x), y: Math.round(s.y), t: now, p: s.fp, rc: s.rc };
       B.addBomb(b);
       B.advance(now);
       dangerCache = null;
       ev.bomb(b);
+      changed = true;
+    }
+    const a = s.rc && botDetonate(s, ctx);
+    if (a) {
+      const e = { o: s.o, n: a.b.n, b: a.b.t, t: now };
+      B.addDet(e);
+      B.advance(now);
+      dangerCache = null; monDanger = null;
+      ev.det(e);
       changed = true;
     }
     const cx = Math.round(s.x), cy = Math.round(s.y), it = B.itemAt(B.idx(cx, cy));
@@ -117,7 +136,11 @@ export function hostStep(R, now, dt, ev) {
       changed = true;
     }
     const kb = killerAt(R, s.x, s.y, now, s.rs);
-    if (kb >= 0 && kill(R, s.o, now, kb)) { ev.dead(s.o, now, kb); changed = true; }
+    if (kb >= 0 && kill(R, s.o, now, kb)) {
+      ev.dead(s.o, now, kb);
+      for (const e of orphanDets(R, s.o, now)) { B.addDet(e); ev.det(e); }
+      changed = true;
+    }
   }
   return checkEnd(R, now) || changed;
 }

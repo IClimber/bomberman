@@ -1,7 +1,7 @@
 // space.js — «Космос»: зорі навколо, палуба станції, колони з вогником, корпус з ілюмінаторами, контейнери,
 // гермодвері замість стін; астронавти в скафандрах кольору гравця; слизняки, тарілки, примари порожнечі.
-import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, mulberry32 } from '../sim.js';
-import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, ghostPath } from './common.js';
+import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE, mulberry32 } from '../sim.js';
+import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bombShape, bombBeat, bombFlash, pillarShade, ghostPath, kickIcon } from './common.js';
 
 const GLOW = '#4fc3ff';
 
@@ -88,7 +88,7 @@ function wall(g, s) {
 }
 
 // Бонуси: 💣 міна, ☄️ комета, 🚀 ракета, 🌀 червоточина, 🛡 силове поле
-const EDGE = { [IT_BOMB]: '#ff6b5a', [IT_FIRE]: '#ffb347', [IT_SPEED]: '#5fd3ff', [IT_PASS]: '#b48cff', [IT_RESIST]: '#5fffb4' };
+const EDGE = { [IT_BOMB]: '#ff6b5a', [IT_FIRE]: '#ffb347', [IT_SPEED]: '#5fd3ff', [IT_PASS]: '#b48cff', [IT_RESIST]: '#5fffb4', [IT_KICK]: '#e8edf5', [IT_REMOTE]: '#ffe066' };
 function item(g, k, s) {
   const p = s * 0.1, c = EDGE[k], cx = s / 2, cy = s / 2;
   g.fillStyle = 'rgba(0,0,0,0.35)';
@@ -134,6 +134,19 @@ function item(g, k, s) {
     g.strokeStyle = rgba(c, 0.6); g.lineWidth = Math.max(1, s * 0.025);
     g.beginPath(); g.ellipse(cx, cy, s * 0.26, s * 0.09, 0, 0, TAU); g.stroke();
     ellipse(g, cx - s * 0.09, cy - s * 0.12, s * 0.07, s * 0.04, 'rgba(255,255,255,0.7)', -0.6);
+  } else if (k === IT_KICK) kickIcon(g, cx, cy, s, '#e8edf5', '#5f6b80', '#ff6b5a');
+  else if (k === IT_REMOTE) {                                      // супутник
+    g.save(); g.translate(cx, cy); g.rotate(-0.6);
+    for (const sx of [-1, 1]) {
+      const x0 = sx > 0 ? s * 0.09 : -s * 0.29;
+      g.fillStyle = '#2b5fd9'; g.fillRect(x0, -s * 0.07, s * 0.2, s * 0.14);
+      g.strokeStyle = '#8fb4ff'; g.lineWidth = Math.max(1, s * 0.015);
+      for (let j = 1; j < 3; j++) { g.beginPath(); g.moveTo(x0 + j * s * 0.067, -s * 0.07); g.lineTo(x0 + j * s * 0.067, s * 0.07); g.stroke(); }
+    }
+    g.fillStyle = '#c8ccd6'; rr(g, -s * 0.09, -s * 0.09, s * 0.18, s * 0.18, s * 0.03); g.fill();
+    line(g, 0, -s * 0.09, 0, -s * 0.2, s * 0.03, '#c8ccd6');
+    circle(g, 0, -s * 0.21, s * 0.035, '#ffe066');
+    g.restore();
   }
 }
 function flame(g, x, y, r, color) {
@@ -256,7 +269,7 @@ export default {
   bg: '#05060f',
   backdrop,
   shadow: 'rgba(79,195,255,0.25)',
-  emoji: { bomb: '💣', fire: '☄️', speed: '🚀', pass: '🌀', resist: '🛡' },
+  emoji: { bomb: '💣', fire: '☄️', speed: '🚀', pass: '🌀', resist: '🛡', kick: '🥾', remote: '🛰️' },
   fire: ['#6a3dff', '#36c8ff', '#eafcff'],
   burn: ['#36c8ff', 'rgba(106,61,255,0)'],
   blocks: 3,

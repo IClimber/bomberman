@@ -1,6 +1,6 @@
 // index.js — стилі графіки (спільні для кімнати: S.room.v — індекс тут). Кожен стиль — об'єкт:
 //   name, bg (тло навколо поля), backdrop? (g, W, H, dpr) — рисунок тла, shadow? — тінь під полем,
-//   emoji { bomb, fire, speed, pass, resist } — бонуси в HUD і кнопка бомби, fire [3 кольори вогню, ззовні всередину],
+//   emoji { bomb, fire, speed, pass, resist, kick, remote } — бонуси в HUD, кнопки бомби й детонатора, fire [3 кольори вогню, ззовні всередину],
 //   burn [низ, верх] — язики на блоці, що горить, pixel? — вогонь «пікселями»,
 //   floor(g, px, py, s, x, y, map), stone(g, px, py, s, border, x, y, map) — у статичний шар,
 //   blocks (скільки варіантів), block(g, s, v), wall(g, s), item(g, k, s) — спрайти клітинки,

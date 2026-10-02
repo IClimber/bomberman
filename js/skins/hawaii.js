@@ -1,7 +1,7 @@
 // hawaii.js — «Гаваї»: пісок, океан замість рамки, валуни й тікі замість стовпів, пальми, кущі гібіскуса
 // й ананаси замість блоків, бамбуковий паркан замість стін; серфери в гавайських сорочках кольору гравця;
 // краби, акули, медузи; бомби-кокоси й лавовий вогонь. Бонуси: 🥥 кокос, 🌋 вулкан, 🍹 коктейль, 🏄 дошка, 🧴 крем від сонця.
-import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST } from '../sim.js';
+import { DX, DY, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_KICK, IT_REMOTE } from '../sim.js';
 import { TAU, rr, rnd, luma, shade, circle, ellipse, line, poly, bombBeat, bombFlash, pillarShade, spark } from './common.js';
 
 const SAND = '#f0d49a', SKIN = '#d9965f', LEAF = '#2f9e44', LEAF_D = '#1f7a34', WOOD = '#7a4a24';
@@ -132,7 +132,7 @@ function wall(g, s) {
 }
 
 // Бонуси на бамбуковій табличці
-const ITEM_BG = { [IT_BOMB]: '#2fb5c4', [IT_FIRE]: '#ff8a5c', [IT_SPEED]: '#ffd166', [IT_PASS]: '#4fc3e8', [IT_RESIST]: '#7fd36f' };
+const ITEM_BG = { [IT_BOMB]: '#2fb5c4', [IT_FIRE]: '#ff8a5c', [IT_SPEED]: '#ffd166', [IT_PASS]: '#4fc3e8', [IT_RESIST]: '#7fd36f', [IT_KICK]: '#ff9ec7', [IT_REMOTE]: '#b48cff' };
 function item(g, k, s) {
   const p = s * 0.1, cx = s / 2, cy = s / 2;
   g.fillStyle = 'rgba(0,0,0,0.25)';
@@ -174,6 +174,21 @@ function item(g, k, s) {
     circle(g, cx, cy - s * 0.02, s * 0.06, '#ffc61a');
     g.strokeStyle = '#ffc61a'; g.lineWidth = Math.max(1, s * 0.02);
     g.beginPath(); for (let j = 0; j < 8; j++) { const a = j * TAU / 8; g.moveTo(cx + Math.cos(a) * s * 0.08, cy - s * 0.02 + Math.sin(a) * s * 0.08); g.lineTo(cx + Math.cos(a) * s * 0.11, cy - s * 0.02 + Math.sin(a) * s * 0.11); } g.stroke();
+  } else if (k === IT_KICK) {                                       // в'єтнамка й кокосик
+    g.save(); g.translate(cx - s * 0.08, cy); g.rotate(-0.5);
+    ellipse(g, 0, 0, s * 0.11, s * 0.26, '#ff6b6b');
+    ellipse(g, 0, s * 0.02, s * 0.08, s * 0.21, '#ffd6a5');
+    g.strokeStyle = '#2b6fb0'; g.lineWidth = Math.max(1, s * 0.035);
+    g.beginPath(); g.moveTo(-s * 0.08, s * 0.02); g.lineTo(0, -s * 0.14); g.lineTo(s * 0.08, s * 0.02); g.stroke();
+    g.restore();
+    coconut(g, cx + s * 0.2, cy + s * 0.14, s * 0.09, false);
+  } else if (k === IT_REMOTE) {                                     // мушля-ріг
+    g.fillStyle = '#ffe3d6';
+    g.beginPath(); g.moveTo(cx - s * 0.26, cy + s * 0.08); g.quadraticCurveTo(cx - s * 0.1, cy - s * 0.3, cx + s * 0.22, cy - s * 0.12);
+    g.quadraticCurveTo(cx + s * 0.28, cy + s * 0.14, cx + s * 0.04, cy + s * 0.22); g.closePath(); g.fill();
+    g.strokeStyle = '#d98a7a'; g.lineWidth = Math.max(1, s * 0.025);
+    for (const t of [0.3, 0.55, 0.8]) { g.beginPath(); g.arc(cx + s * 0.22, cy - s * 0.12, s * 0.42 * t, 2.2, 3.4); g.stroke(); }
+    circle(g, cx + s * 0.2, cy - s * 0.1, s * 0.05, '#ff8a9a');
   }
 }
 
@@ -301,7 +316,7 @@ export default {
   bg: '#0b4a66',
   backdrop,
   shadow: 'rgba(0,30,50,0.5)',
-  emoji: { bomb: '🥥', fire: '🌋', speed: '🍹', pass: '🏄', resist: '🧴' },
+  emoji: { bomb: '🥥', fire: '🌋', speed: '🍹', pass: '🏄', resist: '🧴', kick: '🩴', remote: '🐚' },
   fire: ['#e8401c', '#ff9b21', '#fff0b3'],
   burn: ['#ff6a00', 'rgba(255,200,80,0)'],
   blocks: 4,
