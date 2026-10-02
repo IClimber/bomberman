@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  newRound, hostStep, outcome, checkEnd, kill, applyItem, deadlyAt, killerAt, orphanDets, KB_WALL, KB_MON, KB_NONE,
+  newRound, hostStep, outcome, checkEnd, kill, applyItem, deadlyAt, killerAt, orphanDets, KB_WALL, KB_MON, KB_NONE, COOP_BOTS,
   MODE_VS, MODE_COOP, RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, END_GRACE_MS,
 } from '../js/round.js';
 import {
@@ -22,6 +22,13 @@ test('слоти стартують у кутах з базовими бонус
   for (const s of R.sl) { assert.equal(s.nb, 1); assert.equal(s.fp, 2); assert.ok(s.a); }
   assert.equal(R.mons.length, 0);
   assert.equal(newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1) }).mons.length, 5);
+});
+
+test('розум ботів: у «Один проти одного» — від складності, у «Команді» — завжди найкращий', () => {
+  for (const d of [0, 1, 2]) {
+    assert.equal(newRound({ r: 1, seed: 5, m: MODE_VS, s: 0, d, t0: 0, sl: people(1, 1) }).bd, d);
+    assert.equal(newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d, t0: 0, sl: people(1, 1) }).bd, COOP_BOTS);
+  }
 });
 
 test('підсумок «Один проти одного»: останній живий, нічия, без переможця', () => {

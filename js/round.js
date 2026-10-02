@@ -15,6 +15,9 @@ export const END_GRACE_MS = 400;     // перед підсумком чекає
 export const TOUCH = 0.6;            // монстр ближче — убиває
 export const START_BOMBS = 1, START_FIRE = 2;
 export const MODE_VS = 0, MODE_COOP = 1;
+// Розум ботів (рівень LEVEL у bots.js): у «Один проти одного» — від складності, у «Команді» — завжди найкращий
+// (вони товариші: складність там — кількість і розум монстрів)
+export const COOP_BOTS = 2;
 // Підсумок: 1 — переміг слот wn, 2 — нічия (загинули всі), 3 — без переможця (люди загинули, боти живі),
 // 4 — перемога команди, 5 — поразка команди
 export const RES_WIN = 1, RES_DRAW = 2, RES_NOBODY = 3, RES_TEAM_WIN = 4, RES_TEAM_LOSS = 5;
@@ -35,7 +38,7 @@ export function newRound({ r, seed, m, s, d, t0, sl }) {
     };
   });
   const mons = map.mons.map(mo => ({ i: mo.i, k: mo.k, x: mo.x, y: mo.y, d: 0, a: true, dt: 0, kb: KB_NONE }));
-  return { r, seed, m, s, d, t0, coop, map, board, sl: slots, mons, p: 0, res: 0, wn: 255, endAt: 0 };
+  return { r, seed, m, s, d, bd: coop ? COOP_BOTS : d, t0, coop, map, board, sl: slots, mons, p: 0, res: 0, wn: 255, endAt: 0 };
 }
 
 export function applyItem(s, kind, now) {
@@ -98,13 +101,13 @@ export function hostStep(R, now, dt, ev) {
       if (ev.monster) ev.monster(m);
     }
   }
-  const threat = R.coop && R.d === 0 ? threatMap(R) : null;
-  const reach = R.coop && R.d > 0 ? monsterReach(R, now) : null;
+  const threat = R.coop && R.bd === 0 ? threatMap(R) : null;
+  const reach = R.coop && R.bd > 0 ? monsterReach(R, now) : null;
   for (const s of R.sl) {
     if (!s.a || !s.b) continue;
     const others = R.sl.filter(e => e.a && e !== s);
     const ctx = {
-      board: B, now, diff: R.d, coop: R.coop, danger, threat, reach,
+      board: B, now, diff: R.bd, coop: R.coop, danger, threat, reach,
       enemies: R.coop ? R.mons.filter(m => m.a) : others, allies: R.coop ? others : [],
       monsters: R.coop ? R.mons.filter(m => m.a) : null,
     };
