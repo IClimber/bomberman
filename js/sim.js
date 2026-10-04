@@ -29,7 +29,7 @@ export const MON = [
   { speed: 2.3, sight: 6 },
   { speed: 1.3, ghost: true },
 ];
-const MON_MIX = [[0.6, 0.3, 0.1], [0.45, 0.35, 0.2], [0.3, 0.4, 0.3]];
+const MON_MIX = [[0.6, 0.3, 0.1], [0.45, 0.35, 0.2], [0.2, 0.5, 0.3]];
 const MON_SAFE = 5, GHOST_SAFE = 8;  // монстри (привиди) з'являються не ближче (по сітці) до місць старту
 
 // Напрями: 0 — стоїть, 1 вгору, 2 вправо, 3 вниз, 4 вліво
@@ -112,9 +112,15 @@ export function makeMap(seed, sizeIdx, coop = false, diff = 1) {
       mix = [mix[0] * r, mix[1] * r, g];
     }
     const fromStart = (i) => Math.min(...spawns.map(([sx, sy]) => Math.abs(sx - i % GW) + Math.abs(sy - Math.floor(i / GW))));
+    // скільки якого виду — за частками (а не навмання кожного: інакше на 13×11 «Важко» бувало 5–7 привидів з 8);
+    // залишок — тим, у кого більша дробова частина (при рівності — не привидам); навмання лише порядок
+    const n = mix.map(f => Math.floor(count * f));
+    const rest = [0, 1, 2].sort((a, b) => (count * mix[b] - n[b]) - (count * mix[a] - n[a]) || a - b);
+    for (let k = 0; n[0] + n[1] + n[2] < count; k++) n[rest[k % 3]]++;
+    const kinds = shuffle([...Array(n[0]).fill(0), ...Array(n[1]).fill(1), ...Array(n[2]).fill(2)], rnd);
     const used = new Set();
     for (let k = 0; k < count && k < far.length; k++) {
-      const u = rnd(), kind = u < mix[0] ? 0 : u < mix[0] + mix[1] ? 1 : 2;
+      const kind = kinds[k];
       // привид іде крізь блоки, тож з'являється далі: інакше доходить до старту, поки там лише 3 вільні клітинки
       const i = (MON[kind].ghost && far.find(j => !used.has(j) && fromStart(j) >= GHOST_SAFE)) || far.find(j => !used.has(j));
       used.add(i);
