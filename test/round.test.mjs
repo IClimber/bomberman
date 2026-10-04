@@ -5,7 +5,7 @@ import {
   MODE_VS, MODE_COOP, RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, END_GRACE_MS,
 } from '../js/round.js';
 import {
-  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, RESIST_MS, MAX_BOMBS, BLOCK, EMPTY, MON, FUSE_MS, makeMap, Board, cellOf,
+  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, RESIST_MS, MAX_BOMBS, BLOCK, EMPTY, MON, FUSE_MS, FLAME_MS, makeMap, Board, cellOf,
 } from '../js/sim.js';
 import { monsterReach, TOUCH } from '../js/round.js';
 import { monsterStep } from '../js/monsters.js';
@@ -206,6 +206,60 @@ function botRound(diff, x, y) {
   return R;
 }
 
+// Досяжність монстрів до Дейкстри (пошук у ширину по нинішньому полю) — для порівняння
+function oldReach(R, now) {
+  const B = R.board, { GW, GH } = B.map, n = GW * GH;
+  const reach = new Float64Array(n).fill(Infinity), dist = new Float64Array(n);
+  for (const m of R.mons) {
+    if (!m.a) continue;
+    const kind = MON[m.k], step = 1000 / kind.speed;
+    const tx = m.tx ?? Math.round(m.x), ty = m.ty ?? Math.round(m.y), fx = Math.round(m.x), fy = Math.round(m.y);
+    const seeds = [[tx, ty, Math.abs(m.x - tx) + Math.abs(m.y - ty)], [fx, fy, Math.abs(m.x - fx) + Math.abs(m.y - fy)]];
+    seeds.sort((a, b) => a[2] - b[2]);
+    dist.fill(Infinity);
+    const q = [];
+    for (const [x, y, d] of seeds) { const i = B.idx(x, y); if (d < dist[i]) { dist[i] = d; q.push(i); } }
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h], t = now + (dist[i] - TOUCH) * step;
+      if (t < reach[i]) reach[i] = t;
+      if (dist[i] > 12) continue;
+      const x = i % GW, y = (i - x) / GW;
+      for (let d = 1; d <= 4; d++) {
+        const nx = x + [0, 0, 1, 0, -1][d], ny = y + [0, -1, 0, 1, 0][d], j = ny * GW + nx;
+        if (dist[j] !== Infinity || B.solid(nx, ny, !!kind.ghost)) continue;
+        dist[j] = dist[i] + 1;
+        q.push(j);
+      }
+    }
+  }
+  return reach;
+}
+
+test('досяжність монстрів без бомб — та сама, що й пошуком у ширину; з небезпекою — теж, бо нічого не відкривається', () => {
+  for (const seed of [3, 7, 11, 19]) for (const s of [0, 2]) {
+    const R = newRound({ r: 1, seed, m: MODE_COOP, s, d: 2, t0: 0, sl: people(1) });
+    R.mons.forEach((m, k) => { if (k % 2) { m.x += 0.4; m.tx = Math.round(m.x) + 1; m.ty = Math.round(m.y); } });
+    const a = oldReach(R, 500), b = monsterReach(R, 500), c = monsterReach(R, 500, R.board.danger());
+    for (let i = 0; i < a.length; i++) {
+      assert.ok(a[i] === b[i] || Math.abs(a[i] - b[i]) < 1e-6, `зерно ${seed}, клітинка ${i}: ${a[i]} ≠ ${b[i]}`);
+      assert.ok(b[i] === c[i] || Math.abs(c[i] - b[i]) < 1e-6);
+    }
+  }
+});
+
+test('досяжність монстрів: блок у вогні бомби відкривається, коли згорить', () => {
+  const b = new Board(emptyMap(), 0), GW = b.map.GW;
+  b.cell[2 * GW + 1] = BLOCK;                         // блок у (1, 2) між монстром у (1, 3) і клітинкою (1, 1)
+  b.cell[1 * GW + 3] = BLOCK;                         // і в (3, 1): обхід закрито
+  b.addBomb({ o: 0, n: 1, x: 1, y: 1, t: 0, p: 1 });  // зачепить (1, 2) і (2, 1)
+  b.advance(100);
+  const R = { board: b, mons: [{ i: 1, k: 0, x: 1, y: 3, a: true }] };
+  const at = b.idx(1, 2), step = 1000 / MON[0].speed;
+  assert.equal(monsterReach(R, 100)[at], Infinity);
+  const r = monsterReach(R, 100, b.danger())[at];
+  assert.ok(Math.abs(r - (FUSE_MS + FLAME_MS + step - TOUCH * step)) < 1e-6, `${r}`);
+});
+
 test('бот на довгому шляху помічає нову бомбу й не заходить у її вогонь', () => withRandom(0.5, () => {
   const R = botRound(2, 1, 1), bot = R.sl[1], GW = R.board.map.GW;
   bot.sp = 1;                                         // 3,7 клітинки за секунду: кінець тіку не потрапляє в центр клітинки
@@ -366,3 +420,20 @@ test('«Команда»: помилки рівня не діють — бот �
   });
   assert.equal(path(0), path(2));
 });
+
+test('«Команда»: затиснутий у коридорі між монстрами — бомба під себе, стоїть на ній, поки монстр поруч, і виходить до вибуху', () => withRandom(0.5, () => {
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 2, t0: 0, sl: people(0, 1) });
+  const B = R.board = new Board(emptyMap(), 0), bot = R.sl[0];
+  for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [10, 1]]) B.cell[B.idx(x, y)] = BLOCK;   // коридор (1..9, 1)
+  R.mons = [{ i: 1, k: 0, x: 1, y: 1, d: 0, a: true }, { i: 2, k: 0, x: 9, y: 1, d: 0, a: true }];
+  Object.assign(bot, { x: 5, y: 1, fp: 1 });
+  let bomb = null, stood = false;
+  for (let t = 50; t <= 4500; t += 50) {
+    hostStep(R, t, 0.05, { ...noop, bomb(b) { bomb = bomb || b; } });
+    if (bomb && R.mons.some(m => Math.hypot(m.x - bot.x, m.y - bot.y) <= 1.05) && bot.x === 5 && bot.y === 1) stood = true;
+    if (bomb && t === bomb.t + FUSE_MS) assert.ok(Math.abs(bot.x - 5) + Math.abs(bot.y - 1) > 1, 'у вогні своєї бомби');
+  }
+  assert.ok(bomb && bomb.o === 0 && bomb.x === 5 && bomb.y === 1, 'не поставив');
+  assert.ok(stood, 'не стояв на бомбі, коли монстр поруч');
+  assert.ok(bot.a);
+}));

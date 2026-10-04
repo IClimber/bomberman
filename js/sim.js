@@ -540,6 +540,38 @@ export class Board {
   }
 }
 
+// Найменша бінарна купа: клітинки за часом
+export class Heap {
+  constructor() { this.k = []; this.v = []; }
+  get size() { return this.k.length; }
+  top() { return this.k[0]; }
+  push(v, k) {
+    const K = this.k, V = this.v;
+    let i = K.length;
+    K.push(k); V.push(v);
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (K[p] <= k) break;
+      K[i] = K[p]; V[i] = V[p]; i = p;
+    }
+    K[i] = k; V[i] = v;
+  }
+  pop() {
+    const K = this.k, V = this.v, top = V[0], k = K.pop(), v = V.pop(), n = K.length;
+    if (!n) return top;
+    let i = 0;
+    for (;;) {
+      let c = 2 * i + 1;
+      if (c >= n) break;
+      if (c + 1 < n && K[c + 1] < K[c]) c++;
+      if (K[c] >= k) break;
+      K[i] = K[c]; V[i] = V[c]; i = c;
+    }
+    K[i] = k; V[i] = v;
+    return top;
+  }
+}
+
 // Розстановка бомби: клітинка, де стоїть гравець; не можна, якщо там уже бомба чи стіна
 export function canPlace(board, x, y) {
   const i = board.idx(x, y);

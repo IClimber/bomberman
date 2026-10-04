@@ -80,7 +80,7 @@ const BACK = [0, 3, 4, 1, 2];
 // Повертає true, якщо бот хоче поставити бомбу тут і зараз (хост перевірить і поставить).
 export function botTick(bot, dt, ctx) {
   const L = level(bot, ctx);
-  const ai = bot.ai || (bot.ai = { next: 0, seen: -1, path: [], bomb: false, tx: null, ty: null, goal: -1, roam: false, allyWait: 0, tabu: new Map() });
+  const ai = bot.ai || (bot.ai = { next: 0, seen: -1, path: [], bomb: false, tx: null, ty: null, goal: -1, roam: false, allyWait: 0, tabu: new Map(), shelter: -1 });
   if (ai.tx == null) { ai.tx = Math.round(bot.x); ai.ty = Math.round(bot.y); }
   const board = ctx.board, GW = board.map.GW;
   const seen = sees(bot, ctx, L), bombs = seen.bombs;
@@ -164,6 +164,7 @@ function think(bot, ai, ctx, L) {
   const ms = 1000 / speedOf(bot.sp);
   const danger = ctx.danger();
   const mon = monOf(ctx, L);
+  if (ai.shelter >= 0 && (ai.shelter !== c || board.active.get(c)?.b.o !== bot.o)) ai.shelter = -1;   // вибухнула чи зійшли
   const standOk = (i, t) => danger[i] === Infinity && !danger.mine[i] && board.wallAt[i] > t + L.wallSoon && monOk(mon, i, t) && !board.fireAt(i);
   // не глухий кут, куди йде монстр: є куди відступити раніше за монстрів (для втечі й сховку від своєї бомби)
   const roomy = (i, t) => !ctx.reach || ctx.reach[i] > t + MON_FAR || room(bot, board, i, t, ms, danger, mon, L.spare) >= ROOM_SLACK;
@@ -204,18 +205,32 @@ function think(bot, ai, ctx, L) {
     }
     safe.sort((a, b) => r.dist[a] - r.dist[b]);
     let best = safe.slice(0, 10).find(i => roomy(i, now + r.dist[i] * ms)) ?? -1;  // найближча, де не затиснуть
+    // Сховок на своїй бомбі («Команда»): від монстра сховатися ніде — бомбу під себе й стоїмо на ній (у клітинку з бомбою
+    // монстр не зайде, а з сусідньої не дістане), поки з її вогню можна вийти й пізніше; тоді — геть
+    if (best < 0 && ctx.reach) {
+      if (ai.shelter === c && board.active.get(c)?.b.o === bot.o) {
+        if (canLeave(bot, board, c, now + 1.2 * L.think + 50, ms, danger, L)) { ai.path = []; ai.bomb = false; return; }
+      } else if (danger[c] === Infinity && !danger.mine[c] && canBomb && canPlace(board, ai.tx, ai.ty) && !hitsAlly(board, c, bot.fp, ctx)
+        && ctx.reach[c] > now + ms * 0.5 && ctx.reach[c] < now + 3000
+        && canEscape(bot, board, c, now, ms, danger, { reach: null }, L.spare, () => true, L.wallSoon)) {
+        ai.path = []; ai.bomb = true; ai.shelter = c;
+        return;
+      }
+    }
     if (best >= 0 || !cramped) {                                   // тісно, а просторіше ніде — далі як звичайно
       if (best < 0 && safe.length) best = safe[0];
       if (best < 0 && ctx.reach && danger[c] !== Infinity) {       // від вогню не втекти, не ризикнувши з монстром, — ризикуємо
-        const r2 = bfs(bot, board, c, now, ms, danger, null, null, spare);
-        let pick = -1, pickK = -Infinity;
-        for (let i = 0; i < r2.dist.length; i++) {
-          const t = now + r2.dist[i] * ms;
-          if (r2.dist[i] <= 0 || danger[i] !== Infinity || danger.mine[i] || board.wallAt[i] < t + L.wallSoon || board.fireAt(i)) continue;
-          const k = Math.min(ctx.reach[i] - t, 5000) - r2.dist[i] * 50;
-          if (k > pickK) { pickK = k; pick = i; }
+        for (const lag of [0, null]) {                             // спершу — так, щоб монстр не випередив нас ніде на шляху
+          const r2 = bfs(bot, board, c, now, ms, danger, null, lag == null ? null : { reach: ctx.reach, cross: -ms * 0.5 - lag }, spare);
+          let pick = -1, pickK = -Infinity;
+          for (let i = 0; i < r2.dist.length; i++) {
+            const t = now + r2.dist[i] * ms;
+            if (r2.dist[i] <= 0 || danger[i] !== Infinity || danger.mine[i] || board.wallAt[i] < t + L.wallSoon || board.fireAt(i)) continue;
+            const k = Math.min(ctx.reach[i] - t, 5000) - r2.dist[i] * 50;
+            if (k > pickK) { pickK = k; pick = i; }
+          }
+          if (pick >= 0) { ai.path = pathTo(r2, pick); ai.bomb = false; return; }
         }
-        if (pick >= 0) { ai.path = pathTo(r2, pick); ai.bomb = false; return; }
       }
       ai.path = pathTo(r, best >= 0 ? best : late);
       if (best < 0 && late === c && ctx.reach) ai.path = cornered(bot, board, c, now, ms, danger, ctx.reach);
@@ -405,6 +420,16 @@ function canEscape(bot, board, i, t, ms, danger, mon, spare, roomy, wallSoon = W
     if (r.dist[j] < 0 || hypo.has(j) || danger[j] !== Infinity || danger.mine[j] || board.fireAt(j) || !monOk(mon, j, tj)) continue;
     if (mon.reach && !(mon.reach[j] > te + FLAME_MS) && !roomy(j, tj)) continue;
     if (board.wallAt[j] > tj + wallSoon) return true;
+  }
+  return false;
+}
+
+// Чи можна вийти з клітинки c, вирушивши в момент t, туди, де не вибухне (без огляду на монстрів)
+function canLeave(bot, board, c, t, ms, danger, L) {
+  const r = bfs(bot, board, c, t, ms, danger, null, null, Math.min(L.spare, LAST_SPARE - ms / 2));
+  for (let i = 0; i < r.dist.length; i++) {
+    const ti = t + r.dist[i] * ms;
+    if (r.dist[i] > 0 && danger[i] === Infinity && !danger.mine[i] && !board.fireAt(i) && board.wallAt[i] > ti + L.wallSoon) return true;
   }
   return false;
 }

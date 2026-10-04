@@ -3,7 +3,7 @@
 //   kb (хто вбив, див. KB_*), x, y, dr (напрям), mv (іде), nb (бомб), fp (дальність вогню), sp (бонусів швидкості),
 //   ps (прохід крізь бомби), rs (стійкий до вогню до, спільний час), rc (детонатор), bn (лічильник своїх бомб) }
 import {
-  makeMap, Board, MON, WALL, RESIST_MS, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS, FUSE_MS,
+  makeMap, Board, MON, WALL, PILLAR, BLOCK, FLAME_MS, Heap, RESIST_MS, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS, FUSE_MS,
   IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE, DX, DY, cellOf,
 } from './sim.js';
 import { monsterStep } from './monsters.js';
@@ -99,7 +99,7 @@ export function hostStep(R, now, dt, ev) {
       if (ev.monster) ev.monster(m);
     }
   }
-  const reach = R.coop && R.bd > 0 && R.sl.some(s => s.a && s.b) ? monsterReach(R, now) : null;   // лише коли є кому
+  const reach = R.coop && R.bd > 0 && R.sl.some(s => s.a && s.b) ? monsterReach(R, now, danger()) : null;   // лише коли є кому
   for (const s of R.sl) {
     if (!s.a || !s.b) continue;
     const others = R.sl.filter(e => e.a && e !== s);
@@ -148,33 +148,43 @@ export function hostStep(R, now, dt, ev) {
 }
 
 // Коли монстр найраніше може торкнутися того, хто стоїть у клітинці (спільний час): найгірший випадок — монстр іде
-// просто туди найкоротшим шляхом по прохідних для нього клітинках (привид — крізь блоки). Для ботів «Команди»: вони
-// обходять клітинки, куди монстр устигне раніше за них, і не стоять там, куди він скоро дійде.
-export function monsterReach(R, now) {
+// просто туди найкоротшим за часом шляхом по прохідних для нього клітинках (привид — крізь блоки). Для ботів «Команди»:
+// вони обходять клітинки, куди монстр устигне раніше за них, і не стоять там, куди він скоро дійде.
+// danger (Board.danger) — що відкриється: блок у вогні, коли згорить, бомба, коли вибухне й догорить (інакше бот
+// підривав блок, за яким монстр, чи ховався за бомбою, а за 2–3 с прохід відкривався — і монстр його затискав).
+export function monsterReach(R, now, danger = null) {
   const B = R.board, { GW, GH } = B.map, n = GW * GH;
-  const reach = new Float64Array(n).fill(Infinity), dist = new Float64Array(n);
+  const reach = new Float64Array(n).fill(Infinity), arr = new Float64Array(n), hops = new Float64Array(n);
+  // з якого часу клітинка прохідна: openN — для звичайних монстрів, openG — для привида
+  const openN = new Float64Array(n), openG = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const c = B.cell[i], later = danger && danger[i] !== Infinity ? danger[i] + FLAME_MS : Infinity;
+    if (c === PILLAR || c === WALL) openN[i] = openG[i] = Infinity;
+    else if (B.active.has(i)) openN[i] = openG[i] = later;
+    else if (c === BLOCK) { openG[i] = -Infinity; openN[i] = B.burn.has(i) ? B.burn.get(i) : later; }
+    else openN[i] = openG[i] = -Infinity;
+  }
+  const heap = new Heap();
   for (const m of R.mons) {
     if (!m.a) continue;
-    const kind = MON[m.k], step = 1000 / kind.speed;
+    const kind = MON[m.k], step = 1000 / kind.speed, open = kind.ghost ? openG : openN;
     const tx = m.tx ?? Math.round(m.x), ty = m.ty ?? Math.round(m.y), fx = Math.round(m.x), fy = Math.round(m.y);
-    const seeds = [[tx, ty, Math.abs(m.x - tx) + Math.abs(m.y - ty)], [fx, fy, Math.abs(m.x - fx) + Math.abs(m.y - fy)]];
-    seeds.sort((a, b) => a[2] - b[2]);                             // черга лишається впорядкованою за відстанню
-    dist.fill(Infinity);
-    const q = [];
-    for (const [x, y, d] of seeds) {
-      const i = B.idx(x, y);
-      if (d < dist[i]) { dist[i] = d; q.push(i); }
+    arr.fill(Infinity);
+    for (const [x, y, d] of [[tx, ty, Math.abs(m.x - tx) + Math.abs(m.y - ty)], [fx, fy, Math.abs(m.x - fx) + Math.abs(m.y - fy)]]) {
+      const i = B.idx(x, y), t = now + d * step;
+      if (t < arr[i]) { arr[i] = t; hops[i] = d; heap.push(i, t); }
     }
-    for (let h = 0; h < q.length; h++) {
-      const i = q[h], t = now + (dist[i] - TOUCH) * step;
-      if (t < reach[i]) reach[i] = t;
-      if (dist[i] > 12) continue;                                  // далі — не загроза
+    while (heap.size) {
+      const t = heap.top(), i = heap.pop();
+      if (t > arr[i]) continue;
+      if (t - TOUCH * step < reach[i]) reach[i] = t - TOUCH * step;
+      if (hops[i] > 12) continue;                                  // далі — не загроза
       const x = i % GW, y = (i - x) / GW;
       for (let d = 1; d <= 4; d++) {
-        const nx = x + DX[d], ny = y + DY[d], j = ny * GW + nx;
-        if (dist[j] !== Infinity || B.solid(nx, ny, !!kind.ghost)) continue;
-        dist[j] = dist[i] + 1;
-        q.push(j);
+        const j = (y + DY[d]) * GW + x + DX[d], o = open[j];
+        if (o === Infinity) continue;
+        const tj = (o > t ? o : t) + step;
+        if (tj < arr[j]) { arr[j] = tj; hops[j] = hops[i] + 1; heap.push(j, tj); }
       }
     }
   }
