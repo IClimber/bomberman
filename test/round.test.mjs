@@ -175,6 +175,30 @@ test('монстр і бомба: на «Легко» йде під вибух, 
   assert.equal(survived(2), true);
 });
 
+test('монстри «Важко»: переслідувач «чує» гравця за рогом, блукач повертає до гравця поруч, біля бомби — чекають поза вогнем', () => {
+  const step = (m, diff, players, b = new Board(emptyMap(), 0), now = 0) => withRandom(0, () => {
+    b.advance(now);
+    monsterStep(m, 0.01, b, players, { now, t0: 0, diff, danger: () => b.danger() });
+    return m.d;
+  });
+  const chaser = () => ({ i: 1, k: 1, x: 5, y: 5, d: 2, a: true });
+  assert.equal(step(chaser(), 2, [{ x: 3, y: 3 }]), 1);   // не на одній лінії: найкоротшим шляхом (угору)
+  assert.equal(step(chaser(), 1, [{ x: 3, y: 3 }]), 2);   // «Нормально» — іде, куди йшов
+  const walker = () => ({ i: 1, k: 0, x: 5, y: 1, d: 2, a: true });
+  assert.equal(step(walker(), 2, [{ x: 3, y: 1 }]), 4);
+  assert.equal(step(walker(), 1, [{ x: 3, y: 1 }]), 2);
+  const near = (diff) => {                                // бомба в (5, 1): вогонь (4..6, 1); монстр у (7, 1), гравець — у (1, 1)
+    const b = new Board(emptyMap(), 0);
+    b.addBomb({ o: 0, n: 1, x: 5, y: 1, t: 0, p: 1 });
+    b.cell[b.idx(7, 2)] = BLOCK;                         // обхід униз закрито: геть від вогню — лише праворуч, від гравця
+    const m = { i: 1, k: 0, x: 7, y: 1, d: 4, a: true };
+    for (let t = 2000; t < FUSE_MS; t += 50) withRandom(0, () => { b.advance(t); monsterStep(m, 0.05, b, [{ x: 1, y: 1 }], { now: t, t0: 0, diff, danger: () => b.danger() }); });
+    return [m.x, m.y];
+  };
+  assert.deepEqual(near(2), [7, 1]);                     // стоїть найближче до гравця, поза вогнем
+  assert.notDeepEqual(near(1), [7, 1]);                  // «Нормально» — геть від вибуху
+});
+
 test('привид не полює перші 20 с раунду і далі, ніж за кілька клітинок', () => {
   const dir = (now, tx, ty) => withRandom(0, () => {
     const b = new Board(emptyMap(), 0);
@@ -422,7 +446,7 @@ test('«Команда»: помилки рівня не діють — бот �
 });
 
 test('«Команда»: затиснутий у коридорі між монстрами — бомба під себе, стоїть на ній, поки монстр поруч, і виходить до вибуху', () => withRandom(0.5, () => {
-  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 2, t0: 0, sl: people(0, 1) });
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(0, 1) });   // монстри «Нормально»: тікають далеко
   const B = R.board = new Board(emptyMap(), 0), bot = R.sl[0];
   for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [10, 1]]) B.cell[B.idx(x, y)] = BLOCK;   // коридор (1..9, 1)
   R.mons = [{ i: 1, k: 0, x: 1, y: 1, d: 0, a: true }, { i: 2, k: 0, x: 9, y: 1, d: 0, a: true }];

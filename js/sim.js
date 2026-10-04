@@ -16,6 +16,7 @@ export const SD_BASE_MS = 180000;    // раптова смерть на 13×11;
 export const SD_STEP_BASE_MS = 250;  // крок спіралі на 13×11; на більших картах — частіше
 export const MONSTER_PER = 25;       // на «Нормально» — один монстр на стільки вільних клітинок
 export const DIFF_K = [0.6, 1, 1.5]; // множник кількості монстрів: легко, нормально, важко
+export const MON_PLUS = [0, 0, 1];   // і ще стільки монстрів (на малій карті «Важко» інакше легше, ніж на великій)
 
 // Клітинки
 export const EMPTY = 0, PILLAR = 1, BLOCK = 2, WALL = 3;
@@ -95,7 +96,7 @@ export function makeMap(seed, sizeIdx, coop = false, diff = 1) {
   // Монстри — до бонусів: звичайним монстрам блок на місці появи прибираємо
   const mons = [];
   if (coop) {
-    const count = Math.max(1, Math.round(free / MONSTER_PER * (DIFF_K[diff] ?? 1)));
+    const count = Math.max(1, Math.round(free / MONSTER_PER * (DIFF_K[diff] ?? 1))) + (MON_PLUS[diff] ?? 0);
     const far = [];
     for (let y = 1; y <= h; y++) {
       for (let x = 1; x <= w; x++) {
