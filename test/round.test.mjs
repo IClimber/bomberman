@@ -545,3 +545,27 @@ test('стійкий до вогню бот не ставить бомбу в к
   assert.equal(inFire, 0);
   assert.ok(bot.a);
 }));
+
+test('«Один проти одного», «Легко»: крок навмання не веде у вогонь своєї бомби (у кишеню, яку вона закриває)', () => withRandom(0.05, () => {
+  const R = botRound(0, 3, 1), B = R.board, bot = R.sl[1];
+  B.cell[B.idx(4, 1)] = BLOCK;                                   // з (3, 1): униз — кишеня (3, 2) (знизу блок), ліворуч — вихід
+  B.cell[B.idx(3, 3)] = BLOCK;
+  B.addBomb({ o: 1, n: 1, x: 3, y: 1, t: 0, p: 1 });             // своя: вогонь (2, 1), (3, 2)
+  for (let t = 50; t <= FUSE_MS + 600; t += 50) {
+    hostStep(R, t, 0.05, noop);
+    assert.notDeepEqual([Math.round(bot.x), Math.round(bot.y)], [3, 2], `${t}`);
+  }
+  assert.ok(bot.a);
+}));
+
+test('«Команда»: на своїй бомбі з детонатором бот ховається не довше, ніж горів би запал, — потім виходить і підриває', () => withRandom(0.5, () => {
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(0, 1) });
+  const B = R.board = new Board(emptyMap(), 0), bot = R.sl[0];
+  for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [10, 1]]) B.cell[B.idx(x, y)] = BLOCK;
+  R.mons = [{ i: 1, k: 0, x: 1, y: 1, d: 0, a: true }, { i: 2, k: 0, x: 9, y: 1, d: 0, a: true }];
+  Object.assign(bot, { x: 5, y: 1, fp: 1, rc: true });
+  let placed = 0, det = 0;
+  for (let t = 50; t <= 12000 && !det; t += 50) hostStep(R, t, 0.05, { ...noop, bomb(b) { placed = placed || t; }, det() { det = t; } });
+  assert.ok(placed > 0, 'не сховався');
+  assert.ok(det > 0 || !bot.a, 'стоїть на ній вічно');
+}));

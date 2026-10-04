@@ -183,10 +183,13 @@ function think(bot, ai, ctx, L) {
   if (!here || cramped) {
     if (ai.path.length && Math.random() < L.slip) return;          // «не помітив» — іде, куди йшов
     if (!ctx.coop && chance(L.misstep)) {                          // помилився — крок навмання (не у вогонь)
+      // свої бомби бот знає на будь-якому рівні: не туди, куди дістане їхній вогонь (інакше ставив бомбу з детонатором
+      // і ступав у кишеню, яку вона закривала, — звідти її не підірвати)
+      const own = board.danger(undefined, b => b.o !== bot.o, true, bot.o);
       const x = ai.tx, y = ai.ty, opts = [];
       for (let d = 1; d <= 4; d++) {
         const j = (y + DY[d]) * GW + x + DX[d];
-        if (!board.solid(x + DX[d], y + DY[d], false, bot.ps) && !board.fireAt(j)) opts.push(j);
+        if (!board.solid(x + DX[d], y + DY[d], false, bot.ps) && !board.fireAt(j) && own[j] === Infinity && !own.mine[j]) opts.push(j);
       }
       if (opts.length) { ai.path = [opts[Math.floor(Math.random() * opts.length)]]; ai.bomb = false; ai.next = 0; return; }
     }
@@ -202,17 +205,21 @@ function think(bot, ai, ctx, L) {
       spare = Math.min(spare, LAST_SPARE - ms / 2);
       r = bfs(bot, board, c, now, ms, danger, null, mon, spare);
     }
-    // без виходу — туди, де вибухне найпізніше, а при рівності — найдалі від монстрів
+    // без виходу — туди, де вибухне найпізніше, а при рівності — найдалі від монстрів; не у вогонь своєї бомби з детонатором
+    // (danger.mine): для нього він «не вибухне ніколи», але звідти її не підірвати — бот заходив у кишеню під своєю бомбою
+    // і стояв там вічно
     let late = c, lateK = -Infinity;
     const safe = [];
     for (let i = 0; i < r.dist.length; i++) {
       if (r.dist[i] < 0) continue;
       if (standOk(i, now + r.dist[i] * ms)) { if (!cramped || i !== c) safe.push(i); continue; }
-      const k = (board.fireAt(i) ? 0 : Math.min(danger[i] - now, 1e6)) + (ctx.reach ? Math.min(ctx.reach[i] - now - r.dist[i] * ms, 1e5) : farFrom(ctx.monsters, i, GW) * 100);
+      const k = (board.fireAt(i) ? 0 : Math.min(danger[i] - now, 1e6)) + (ctx.reach ? Math.min(ctx.reach[i] - now - r.dist[i] * ms, 1e5) : farFrom(ctx.monsters, i, GW) * 100)
+        - (danger.mine[i] && !bot.ps ? 3e6 : 0);                     // з «проходом крізь бомби» кишеня не замкнена
       if (k > lateK) { lateK = k; late = i; }
     }
     safe.sort((a, b) => r.dist[a] - r.dist[b]);
     let best = safe.slice(0, 10).find(i => roomy(i, now + r.dist[i] * ms)) ?? -1;  // найближча, де не затиснуть
+    const under = board.active.get(c), overdue = !!under && under.b.o === bot.o && under.te === Infinity && now >= under.b.t + FUSE_MS;
     // монстри поблизу — не найближча, а та, де простору найбільше (кишеня, хай і ближча, — пастка), і подалі від них
     if (ctx.reach && ctx.reach[c] < now + MON_NEAR) {
       let bestK = -Infinity;
@@ -225,8 +232,10 @@ function think(bot, ai, ctx, L) {
     // монстр не зайде, а з сусідньої не дістане), поки з її вогню можна вийти й пізніше; тоді — геть. Товариш у тій самій
     // клітинці не заважає: він ховається на ній так само
     if (best < 0 && ctx.reach) {
-      if (board.active.has(c)) {                                   // своя чи товариша, з яким стоїмо в одній клітинці
-        if (canLeave(bot, board, c, now + 1.2 * L.think + 50, ms, danger, L)) { ai.path = []; ai.bomb = false; return; }
+      const a = board.active.get(c);
+      if (a) {                                                     // своя чи товариша, з яким стоїмо в одній клітинці
+        // своя з детонатором сама не вибухне — стоїмо на ній не довше, ніж горів би запал, далі виходимо й підриваємо
+        if (!overdue && canLeave(bot, board, c, now + 1.2 * L.think + 50, ms, danger, L)) { ai.path = []; ai.bomb = false; return; }
       } else if (danger[c] === Infinity && !danger.mine[c] && canBomb && canPlace(board, ai.tx, ai.ty) && !hitsAlly(board, c, bot.fp, ctx, true)
         && ctx.reach[c] > now + ms * 0.5 && ctx.reach[c] < now + 3000
         && canEscape(bot, board, c, now, ms, danger, { reach: null }, L.spare, L.wallSoon)) {
@@ -236,7 +245,9 @@ function think(bot, ai, ctx, L) {
     }
     if (best >= 0 || !cramped) {                                   // тісно, а просторіше ніде — далі як звичайно
       if (best < 0 && safe.length) best = safe[0];
-      if (best < 0 && ctx.reach && danger[c] !== Infinity) {       // від вогню не втекти, не ризикнувши з монстром, — ризикуємо
+      // від вогню не втекти, не ризикнувши з монстром, — ризикуємо (зі своєї бомби з детонатором після запалу — так само:
+      // вона сама не вибухне, і бот стояв би на ній вічно, а монстри — стерегли)
+      if (best < 0 && ctx.reach && (danger[c] !== Infinity || overdue)) {
         // спершу — так, щоб монстр не випередив нас ніде на шляху; далі — повз монстрів, що стоять чи йдуть поруч
         // (не через клітинки, де вони є чи куди йдуть, і подалі від них: монстри «Важко» чекають за межею вогню); далі — будь-як
         const near = new Float64Array(ctx.reach.length).fill(Infinity);
@@ -547,7 +558,7 @@ export function botDetonate(bot, ctx) {
   const soon = bot.ai ? [bot.ai.ty * GW + bot.ai.tx, ...bot.ai.path.filter((j, k) => (k + 0.5) * ms < FLAME_MS + 150)] : [];
   for (const a of board.remoteOf(bot.o)) {
     const fire = chainCells(board, a.i, a.b.p);
-    if (fire.has(at(bot)) || soon.some(j => fire.has(j))) continue;
+    if ((fire.has(at(bot)) || soon.some(j => fire.has(j))) && !shielded(bot, now)) continue;   // стійкий — підриває й під собою
     if (ctx.coop && ctx.allies.some(e => fire.has(at(e)))) continue;
     const age = now - a.b.t;
     if (age >= FUSE_MS || (age >= L.detAge && ctx.enemies.some(e => fire.has(at(e)))
