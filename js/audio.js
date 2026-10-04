@@ -1,5 +1,5 @@
 // audio.js — звуки, згенеровані Web Audio (без файлів). Вимкнення запам'ятовується в localStorage.
-let ac = null, master = null, noiseBuf = null;
+let ac = null, master = null, noiseBuf = null, echo = null;
 let muted = false;
 try { muted = localStorage.getItem('bomberman-mute') === '1'; } catch {}
 
@@ -22,6 +22,15 @@ export function unlock() {
     noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    // Відлуння (для вибуху): затримка зі згасанням, у петлі — лише низи, тож ехо глухе, а не дзвінке
+    echo = ac.createGain();
+    const delay = ac.createDelay(1), low = ac.createBiquadFilter(), back = ac.createGain(), wet = ac.createGain();
+    delay.delayTime.value = 0.19;
+    low.type = 'lowpass'; low.frequency.value = 700;
+    back.gain.value = 0.38;
+    wet.gain.value = 0.32;
+    echo.connect(delay).connect(low).connect(back).connect(delay);
+    low.connect(wet).connect(master);
   }
   if (ac.state === 'running') return;
   ac.resume().catch(() => {});
@@ -32,7 +41,7 @@ export function unlock() {
 }
 const ready = () => ac && !muted && ac.state === 'running';
 
-function tone(f0, f1, dur, type = 'square', vol = 0.15, delay = 0) {
+function tone(f0, f1, dur, type = 'square', vol = 0.15, delay = 0, out = master) {
   const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
   o.type = type;
   o.frequency.setValueAtTime(f0, t);
@@ -40,11 +49,11 @@ function tone(f0, f1, dur, type = 'square', vol = 0.15, delay = 0) {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(master);
+  o.connect(g).connect(out);
   o.start(t);
   o.stop(t + dur + 0.02);
 }
-function noise(dur, vol, fFrom, fTo, delay = 0) {
+function noise(dur, vol, fFrom, fTo, delay = 0, out = master) {
   const t = ac.currentTime + delay, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
   s.buffer = noiseBuf;
   f.type = 'lowpass';
@@ -52,7 +61,7 @@ function noise(dur, vol, fFrom, fTo, delay = 0) {
   f.frequency.exponentialRampToValueAtTime(fTo, t + dur);
   g.gain.setValueAtTime(vol, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  s.connect(f).connect(g).connect(master);
+  s.connect(f).connect(g).connect(out);
   s.start(t, Math.random() * 0.5);
   s.stop(t + dur + 0.02);
 }
@@ -65,8 +74,15 @@ export const sfx = {
     const now = ac.currentTime;
     if (now - lastBlast < 0.05) return;                        // ланцюжок — один гучний вибух, а не десять
     lastBlast = now;
-    noise(0.55, 0.6, 2200, 160);
-    tone(90, 38, 0.45, 'sine', 0.5);
+    // басовитіший (нижчий тон і короткий низький удар, у шумі менше верхів) і з відлунням; гучність — як була
+    const bus = ac.createGain();
+    bus.gain.value = 0.75;
+    bus.connect(master);
+    bus.connect(echo);
+    noise(0.6, 0.6, 1600, 120, 0, bus);
+    tone(75, 30, 0.6, 'sine', 0.55, 0, bus);
+    tone(140, 45, 0.12, 'triangle', 0.3, 0, bus);
+    setTimeout(() => bus.disconnect(), 3000);
   },
   pick() { if (ready()) [660, 880, 1320].forEach((f, k) => tone(f, f, 0.07, 'triangle', 0.16, k * 0.06)); },
   death() { if (ready()) tone(560, 90, 0.7, 'sawtooth', 0.14); },
