@@ -49,14 +49,26 @@ test('підсумок «Один проти одного»: останній ж
   assert.deepEqual(outcome(Z), [RES_NOBODY, 255]);
 });
 
-test('підсумок «Команди»: усі монстри — перемога, усі люди — поразка', () => {
+test('підсумок «Команди»: усі монстри — перемога, уся команда (люди й боти) — поразка, усі — хто протримався довше', () => {
   const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1, 1) });
   assert.deepEqual(outcome(R), [0, 255]);
+  kill(R, 0, 0);                                        // людина загинула, бот живий — раунд іде
+  assert.deepEqual(outcome(R), [0, 255]);
   for (const m of R.mons) m.a = false;
-  assert.deepEqual(outcome(R), [RES_TEAM_WIN, 255]);
+  assert.deepEqual(outcome(R), [RES_TEAM_WIN, 255]);    // бот дотягнув
   const Q = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1, 1) });
-  kill(Q, 0, 0);
+  kill(Q, 0, 0); kill(Q, 1, 100);
   assert.deepEqual(outcome(Q), [RES_TEAM_LOSS, 255]);
+  const all = (team, mon) => {                          // загинули всі: команда останньою — у team, останній монстр — у mon
+    const Z = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1, 1) });
+    kill(Z, 0, 1000); kill(Z, 1, team);
+    for (const m of Z.mons) { m.a = false; m.dt = 900; }
+    Z.mons[0].dt = mon;
+    return outcome(Z)[0];
+  };
+  assert.equal(all(5050, 5000), RES_TEAM_WIN);
+  assert.equal(all(5000, 5000), RES_DRAW);
+  assert.equal(all(5000, 5050), RES_DRAW);
 });
 
 test('кінець раунду — після END_GRACE_MS, з підсумком на той момент', () => {
@@ -459,5 +471,32 @@ test('«Команда»: затиснутий у коридорі між мон
   }
   assert.ok(bomb && bomb.o === 0 && bomb.x === 5 && bomb.y === 1, 'не поставив');
   assert.ok(stood, 'не стояв на бомбі, коли монстр поруч');
+  assert.ok(bot.a);
+}));
+
+test('«Команда»: двоє ботів в одній клітинці, затиснуті монстрами, — бомба під себе (товариш ховається на ній теж)', () => withRandom(0.5, () => {
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(0, 2) });
+  const B = R.board = new Board(emptyMap(), 0);
+  for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [10, 1]]) B.cell[B.idx(x, y)] = BLOCK;
+  R.mons = [{ i: 1, k: 0, x: 1, y: 1, d: 0, a: true }, { i: 2, k: 0, x: 9, y: 1, d: 0, a: true }];
+  for (const s of R.sl) Object.assign(s, { x: 5, y: 1, fp: 1 });
+  let bomb = null;
+  for (let t = 50; t <= 4500; t += 50) hostStep(R, t, 0.05, { ...noop, bomb(b) { bomb = bomb || b; } });
+  assert.ok(bomb && bomb.x === 5 && bomb.y === 1, 'не поставили');
+  assert.ok(R.sl.every(s => s.a));
+}));
+
+test('«Команда»: стійкий до вогню бот на своїй бомбі з монстром поруч не тікає (вогонь уб\'є монстра, а не його)', () => withRandom(0.5, () => {
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(0, 1) });
+  const B = R.board = new Board(emptyMap(), 0), bot = R.sl[0];
+  for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [10, 1]]) B.cell[B.idx(x, y)] = BLOCK;
+  R.mons = [{ i: 1, k: 0, x: 6, y: 1, d: 0, a: true }];
+  Object.assign(bot, { x: 5, y: 1, fp: 2, rs: 10000 });
+  B.addBomb({ o: 0, n: 1, x: 5, y: 1, t: 0, p: 2 });
+  for (let t = 50; t <= FUSE_MS + 200; t += 50) {
+    const near = R.mons.some(m => m.a && Math.abs(m.x - 5) + Math.abs(m.y - 1) <= 3);
+    hostStep(R, t, 0.05, noop);
+    if (near) assert.deepEqual([bot.x, bot.y], [5, 1], `${t}`);
+  }
   assert.ok(bot.a);
 }));

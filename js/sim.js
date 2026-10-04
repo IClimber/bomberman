@@ -106,7 +106,11 @@ export function makeMap(seed, sizeIdx, coop = false, diff = 1) {
     }
     shuffle(far, rnd);
     far.sort((a, b) => (cell[a] === EMPTY ? 0 : 1) - (cell[b] === EMPTY ? 0 : 1));   // спершу порожні
-    const mix = MON_MIX[diff] ?? MON_MIX[1];
+    let mix = MON_MIX[diff] ?? MON_MIX[1];
+    if (diff === 2) {                // «Важко»: на більшій карті привидів менше (крізь блоки — від них ніде не сховатися), решта — звичайні
+      const g = mix[2] * Math.min(1, Math.sqrt(143 / (w * h))), r = (1 - g) / (mix[0] + mix[1]);
+      mix = [mix[0] * r, mix[1] * r, g];
+    }
     const fromStart = (i) => Math.min(...spawns.map(([sx, sy]) => Math.abs(sx - i % GW) + Math.abs(sy - Math.floor(i / GW))));
     const used = new Set();
     for (let k = 0; k < count && k < far.length; k++) {

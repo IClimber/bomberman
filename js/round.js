@@ -17,8 +17,8 @@ export const MODE_VS = 0, MODE_COOP = 1;
 // Розум ботів (рівень LEVEL у bots.js): у «Один проти одного» — від складності, у «Команді» — завжди найкращий
 // (вони товариші: складність там — кількість і розум монстрів)
 export const COOP_BOTS = 2;
-// Підсумок: 1 — переміг слот wn, 2 — нічия (загинули всі), 3 — без переможця (люди загинули, боти живі),
-// 4 — перемога команди, 5 — поразка команди
+// Підсумок: 1 — переміг слот wn, 2 — нічия (загинули всі; у «Команді» — і монстри, причому останній — не раніше за команду),
+// 3 — без переможця (люди загинули, боти живі), 4 — перемога команди, 5 — поразка команди
 export const RES_WIN = 1, RES_DRAW = 2, RES_NOBODY = 3, RES_TEAM_WIN = 4, RES_TEAM_LOSS = 5;
 // Хто вбив (kb слоту чи монстра): 0–3 — вогонь бомби цього слоту (свій — сам себе), KB_WALL — стіна раптової смерті,
 // KB_MON + вид — монстр, KB_LEFT — вийшов з гри, KB_NONE — невідомо
@@ -194,10 +194,14 @@ export function monsterReach(R, now, danger = null) {
 // Підсумок за поточним станом (0 — раунд триває)
 export function outcome(R) {
   const alive = R.sl.filter(s => s.a), people = alive.filter(s => !s.b);
-  if (R.coop) {
-    if (!people.length) return [RES_TEAM_LOSS, 255];
-    if (!R.mons.some(m => m.a)) return [RES_TEAM_WIN, 255];
-    return [0, 255];
+  if (R.coop) {                      // команда — люди й боти разом: поки живий хоч хтось із них, раунд іде
+    const mons = R.mons.some(m => m.a);
+    if (alive.length && mons) return [0, 255];
+    if (alive.length) return [RES_TEAM_WIN, 255];
+    if (mons) return [RES_TEAM_LOSS, 255];
+    // загинули всі (раптова смерть): команда протрималась довше за останнього монстра — перемога, інакше — нічия
+    const last = (list) => list.reduce((t, e) => Math.max(t, e.dt), -Infinity);
+    return [last(R.sl) > last(R.mons) ? RES_TEAM_WIN : RES_DRAW, 255];
   }
   if (alive.length === 0) return [RES_DRAW, 255];
   if (alive.length === 1 && !alive[0].b) return [RES_WIN, alive[0].o];
