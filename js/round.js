@@ -18,8 +18,9 @@ export const MODE_VS = 0, MODE_COOP = 1;
 // (вони товариші: складність там — кількість і розум монстрів)
 export const COOP_BOTS = 2;
 // Підсумок: 1 — переміг слот wn, 2 — нічия (загинули всі; у «Команді» — і монстри, причому останній — не раніше за команду),
-// 3 — без переможця (люди загинули, боти живі), 4 — перемога команди, 5 — поразка команди
-export const RES_WIN = 1, RES_DRAW = 2, RES_NOBODY = 3, RES_TEAM_WIN = 4, RES_TEAM_LOSS = 5;
+// 3 — без переможця (люди загинули, боти живі), 4 — перемога команди, 5 — поразка команди,
+// 6 — «Команда»: люди загинули, боти живі — підсумок уже показано (кнопки), а результат буде, коли боти дограють
+export const RES_WIN = 1, RES_DRAW = 2, RES_NOBODY = 3, RES_TEAM_WIN = 4, RES_TEAM_LOSS = 5, RES_GOING = 6;
 // Хто вбив (kb слоту чи монстра): 0–3 — вогонь бомби цього слоту (свій — сам себе), KB_WALL — стіна раптової смерті,
 // KB_MON + вид — монстр, KB_LEFT — вийшов з гри, KB_NONE — невідомо
 export const KB_WALL = 10, KB_MON = 20, KB_LEFT = 30, KB_NONE = 255;
@@ -196,7 +197,7 @@ export function outcome(R) {
   const alive = R.sl.filter(s => s.a), people = alive.filter(s => !s.b);
   if (R.coop) {                      // команда — люди й боти разом: поки живий хоч хтось із них, раунд іде
     const mons = R.mons.some(m => m.a);
-    if (alive.length && mons) return [0, 255];
+    if (alive.length && mons) return [people.length ? 0 : RES_GOING, 255];
     if (alive.length) return [RES_TEAM_WIN, 255];
     if (mons) return [RES_TEAM_LOSS, 255];
     // загинули всі (раптова смерть): команда протрималась довше за останнього монстра — перемога, інакше — нічия
@@ -210,13 +211,14 @@ export function outcome(R) {
 }
 
 // Кінець раунду — із затримкою END_GRACE_MS. true — раунд щойно закінчився.
+// Підсумок «гра продовжується» (RES_GOING) потім міняється на справжній — так само із затримкою.
 export function checkEnd(R, now) {
-  if (R.p !== 0) return false;
+  if (R.p !== 0 && R.res !== RES_GOING) return false;
   const [res, wn] = outcome(R);
-  if (!res) { R.endAt = 0; return false; }
+  if (!res || (R.p !== 0 && res === RES_GOING)) { R.endAt = 0; return false; }
   if (!R.endAt) { R.endAt = now + END_GRACE_MS; return false; }
   if (now < R.endAt) return false;
-  R.p = 1; R.res = res; R.wn = wn;
+  R.p = 1; R.res = res; R.wn = wn; R.endAt = 0;
   return true;
 }
 

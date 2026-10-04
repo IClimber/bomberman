@@ -4,7 +4,7 @@ import { S, EMOJI } from './state.js';
 import { net, act, startNeed } from './net.js';
 import { sfx } from './audio.js';
 import { dot } from './lobby.js';
-import { RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, KB_WALL, KB_MON, KB_LEFT } from './round.js';
+import { RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, RES_GOING, KB_WALL, KB_MON, KB_LEFT } from './round.js';
 import { MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS } from './sim.js';
 import { skinOf } from './skins/index.js';
 
@@ -166,6 +166,7 @@ function renderResult(R) {
     [RES_NOBODY]: 'Без переможця',
     [RES_TEAM_WIN]: 'Перемога команди!',
     [RES_TEAM_LOSS]: 'Монстри перемогли',
+    [RES_GOING]: 'Гра продовжується',
   }[R.res] || 'Кінець раунду';
   const good = R.res === RES_TEAM_WIN || (R.res === RES_WIN && R.wn === S.mySlot);
   const bad = R.res === RES_TEAM_LOSS || (R.res === RES_WIN && S.mySlot >= 0 && R.wn !== S.mySlot);

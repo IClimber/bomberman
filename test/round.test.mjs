@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   newRound, hostStep, outcome, checkEnd, kill, applyItem, deadlyAt, killerAt, orphanDets, KB_WALL, KB_MON, KB_NONE, COOP_BOTS,
-  MODE_VS, MODE_COOP, RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, END_GRACE_MS,
+  MODE_VS, MODE_COOP, RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, RES_GOING, END_GRACE_MS,
 } from '../js/round.js';
 import {
   IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, RESIST_MS, MAX_BOMBS, BLOCK, EMPTY, MON, FUSE_MS, FLAME_MS, makeMap, Board, cellOf,
@@ -52,8 +52,8 @@ test('підсумок «Один проти одного»: останній ж
 test('підсумок «Команди»: усі монстри — перемога, уся команда (люди й боти) — поразка, усі — хто протримався довше', () => {
   const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1, 1) });
   assert.deepEqual(outcome(R), [0, 255]);
-  kill(R, 0, 0);                                        // людина загинула, бот живий — раунд іде
-  assert.deepEqual(outcome(R), [0, 255]);
+  kill(R, 0, 0);                                        // людина загинула, бот живий — підсумок «гра продовжується»
+  assert.deepEqual(outcome(R), [RES_GOING, 255]);
   for (const m of R.mons) m.a = false;
   assert.deepEqual(outcome(R), [RES_TEAM_WIN, 255]);    // бот дотягнув
   const Q = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1, 1) });
@@ -500,3 +500,18 @@ test('«Команда»: стійкий до вогню бот на своїй 
   }
   assert.ok(bot.a);
 }));
+
+test('«Команда»: люди загинули, боти живі — одразу підсумок «гра продовжується», боти грають далі, потім — справжній результат', () => {
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 0, t0: 0, sl: people(1, 1) });
+  kill(R, 0, 100);
+  let t = 0;
+  while (R.p === 0) { t += 50; hostStep(R, t, 0.05, noop); }
+  assert.equal(R.res, RES_GOING);
+  assert.ok(t <= 100 + END_GRACE_MS + 50);
+  const at = [R.sl[1].x, R.sl[1].y];
+  for (let k = 0; k < 40; k++) { t += 50; hostStep(R, t, 0.05, noop); }
+  assert.notDeepEqual([R.sl[1].x, R.sl[1].y], at);      // бот грає під підсумком
+  for (const m of R.mons) { m.a = false; m.dt = t; }
+  for (let k = 0; k < 20 && R.res === RES_GOING; k++) { t += 50; hostStep(R, t, 0.05, noop); }
+  assert.deepEqual([R.p, R.res], [1, RES_TEAM_WIN]);
+});

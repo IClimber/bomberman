@@ -5,7 +5,7 @@ import { net, hooks, lobbyMembers, nameOf, seedOf, resultShown, SYNC_LAG } from 
 import { S, COLORS, q8 } from './state.js';
 import { SIZES, mulberry32 } from './sim.js';
 import { SKINS } from './skins/index.js';
-import { newRound, hostStep, orphanDets, COUNTDOWN_MS, MODE_VS, RES_WIN, RES_TEAM_WIN, KB_LEFT } from './round.js';
+import { newRound, hostStep, orphanDets, COUNTDOWN_MS, MODE_VS, RES_WIN, RES_TEAM_WIN, RES_GOING, KB_LEFT } from './round.js';
 
 export const WORLD_EVERY = 100;      // хост розсилає стан раунду раз на стільки мс (і одразу при змінах)
 const TICK_MS = 50;
@@ -184,13 +184,17 @@ function tick() {
   const R = S.R;
   if (!R || R.r !== S.room.g) { backToLobby(); return; }          // раунду не знаємо — у лоббі
   const changed = hostStep(R, now, dt, EV);
-  if (R.p === 1 && !R.scored) {                                   // кінець: таблиця, «Грати» — з чистого аркуша
-    R.scored = true;
-    S.room.e = R.r;
-    score(R);
+  if (R.p === 1 && !R.ended) {                                    // підсумок: «Грати» — з чистого аркуша
+    R.ended = true;
     for (const p of S.room.pp) { p.r = false; p.rt = 0; }
     sendLobby();
     hooks.round();
+  }
+  if (R.p === 1 && R.res !== RES_GOING && !R.scored) {            // результат відомий (боти могли догравати): таблиця
+    R.scored = true;
+    S.room.e = R.r;
+    score(R);
+    sendLobby();
   }
   if (changed || pnow - lastWorld >= WORLD_EVERY) sendWorld();
 }
@@ -219,6 +223,7 @@ function becameHost(now) {
   for (const s of R.sl) s.ai = null;
   for (const m of R.mons) { m.tx = null; m.ty = null; }
   R.endAt = 0;
-  if (R.p === 1 || S.room.e === R.r) R.scored = true;
+  if (R.p === 1) R.ended = true;
+  if ((R.p === 1 && R.res !== RES_GOING) || S.room.e === R.r) R.scored = true;
 }
 export function startHostLoop() { setInterval(tick, TICK_MS); }

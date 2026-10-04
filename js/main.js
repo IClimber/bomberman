@@ -4,7 +4,7 @@ import { S, EMOJI, q8 } from './state.js';
 import { net, hooks, act, nameOf, GRACE_MS } from './net.js';
 import { createRoom, startHostLoop } from './host.js';
 import { moveActor, speedOf, canPlace, makeMap, hashStr, DX, DY, MON } from './sim.js';
-import { killerAt, kill, applyItem, orphanDets, RES_WIN, RES_TEAM_WIN, RES_TEAM_LOSS } from './round.js';
+import { killerAt, kill, applyItem, orphanDets, RES_WIN, RES_TEAM_WIN, RES_TEAM_LOSS, RES_GOING } from './round.js';
 import { createRenderer } from './render.js';
 import { initLobby, renderLobby } from './lobby.js';
 import { renderHud, renderNet, toast, initHud, hudBottom, feedDeath, feedEmo } from './hud.js';
@@ -262,7 +262,7 @@ function roundCues(R, now) {
     if (sec !== cue.beep && sec <= 3) { cue.beep = sec; sfx.beep(sec <= 0); }
   }
   if (!cue.sd && R.p === 0 && now >= R.board.sdAt) { cue.sd = true; sfx.sudden(); }
-  if (!cue.end && R.p === 1) {
+  if (!cue.end && R.p === 1 && R.res !== RES_GOING) {
     cue.end = true;
     if (S.mySlot >= 0) {
       const won = R.res === RES_TEAM_WIN || (R.res === RES_WIN && R.wn === S.mySlot);
