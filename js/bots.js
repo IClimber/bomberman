@@ -5,7 +5,7 @@
 // лише якщо після неї є куди втекти.
 import { DX, DY, FUSE_MS, FLAME_MS, BLOCK, PILLAR, WALL, speedOf, canPlace, hashStr, bombKey,
   IT_BOMB, IT_FIRE, IT_RESIST } from './sim.js';
-import { stepTo } from './monsters.js';
+import { stepTo, reachBlocked } from './monsters.js';
 
 // Складність: think — як часто думає (мс; vsThink — у «Один проти одного»); slip — імовірність не помітити небезпеку цього разу;
 // aggro — імовірність поставити бомбу, коли є ціль; spare — запас часу на втечу (мс);
@@ -34,6 +34,8 @@ const WALL_SOON = 4000;              // клітинка, куди за стіл
 const ROOM_DEPTH = 6;                // «Нормально», «Важко»: з клітинки, до якої може дійти монстр, має бути куди відступити —
 const ROOM_SLACK = 1000;             // за ROOM_DEPTH кроків, раніше за монстрів, туди, де до них ще стільки мс
 const MON_FAR = 3000;                // монстр дійде не раніше, ніж за стільки мс, — простір не перевіряємо
+const MON_NEAR = 6000;               // монстр дійде раніше — тікаючи, обираємо простір, а не найближчу клітинку
+const MON_ROAM = 4000;               // … — без цілі йдемо на відкрите місце, а не до блоків
 const LAST_SPARE = 120;              // втеча без запасу spare: з клітинки, що вибухне, вийти (пів кроку) хоч за стільки мс до вибуху
 
 // Поля рівня лише для «Один проти одного»; за замовчуванням — без помилок (як «Важко»)
@@ -211,6 +213,14 @@ function think(bot, ai, ctx, L) {
     }
     safe.sort((a, b) => r.dist[a] - r.dist[b]);
     let best = safe.slice(0, 10).find(i => roomy(i, now + r.dist[i] * ms)) ?? -1;  // найближча, де не затиснуть
+    // монстри поблизу — не найближча, а та, де простору найбільше (кишеня, хай і ближча, — пастка), і подалі від них
+    if (ctx.reach && ctx.reach[c] < now + MON_NEAR) {
+      let bestK = -Infinity;
+      for (const i of safe.slice(0, 30)) {
+        const t = now + r.dist[i] * ms, k = openness(bot, board, i, t, ms, danger, mon, L.spare, ctx.reach) - r.dist[i] * 60;
+        if (k > bestK) { bestK = k; best = i; }
+      }
+    }
     // Сховок на бомбі («Команда»): від монстра сховатися ніде — бомбу під себе й стоїмо на ній (у клітинку з бомбою
     // монстр не зайде, а з сусідньої не дістане), поки з її вогню можна вийти й пізніше; тоді — геть. Товариш у тій самій
     // клітинці не заважає: він ховається на ній так само
@@ -319,6 +329,15 @@ function think(bot, ai, ctx, L) {
     for (const [gx, gy] of goals) md = Math.min(md, Math.abs(gx - x) + Math.abs(gy - y));
     const key = md + k.d * 0.1 + Math.random() * 0.5;
     if (key < bestK) { bestK = key; best = k; }
+  }
+  if (ctx.reach && ctx.reach[c] < now + MON_ROAM) {
+    // монстр наближається, а цілі немає — на відкрите місце, подалі від монстрів (а не до блоків, тобто в кишені)
+    let bestK = openness(bot, board, c, now, ms, danger, mon, L.spare, ctx.reach);
+    best = null;
+    for (const k of cand.slice().sort((a, b) => a.d - b.d).slice(0, 30)) {
+      const v = openness(bot, board, k.i, now + k.d * ms, ms, danger, mon, L.spare, ctx.reach) - k.d * 60;
+      if (v > bestK) { bestK = v; best = k; }
+    }
   }
   ai.path = best ? pathTo(r, best.i) : [];
   ai.roam = true;
@@ -431,8 +450,11 @@ function blastCells(board, i, p) {
 // поки бомба не догорить: доти вогонь замикає бота в «кишені» (раніше дозволялось і туди, звідки «є куди відступити», —
 // і бот сідав у кишеню з 2–3 клітинок, поки привид ішов до нього крізь блоки)
 function canEscape(bot, board, i, t, ms, danger, mon, spare, wallSoon = WALL_SOON) {
+  if (board.fireUntil[i] > t) return false;                       // у вогні бомба вибухне одразу (стійкий бот ставив би й ставив)
   const te = Math.min(t + FUSE_MS, danger[i]);
   const hypo = new Map([...chainCells(board, i, bot.fp)].map(j => [j, Math.min(te, danger[j])]));
+  // бомба — заслін: крізь неї монстр не пройде, поки вона не вибухне й не догорить
+  if (mon.reach) { const reach = reachBlocked(mon.reach, i, te + FLAME_MS); if (reach !== mon.reach) mon = { ...mon, reach }; }
   if (shielded(bot, Math.max(te, danger.last[i]))) return true;   // стійкий, поки вона (і все тут) догорить, — можна й стояти
   const r = bfs(bot, board, i, t, ms, danger, hypo, mon, spare, i);
   for (let j = 0; j < r.dist.length; j++) {
@@ -446,6 +468,15 @@ function canEscape(bot, board, i, t, ms, danger, mon, spare, wallSoon = WALL_SOO
 
 // Чи стійкий бот до вогню від вибуху в момент t (до того, як він догорить)
 const shielded = (bot, t) => Number.isFinite(t) && bot.rs > t + FLAME_MS + 150;
+
+// Наскільки клітинка i (з моменту t) відкрита: скільки клітинок навколо (до ROOM_DEPTH кроків), куди можна дійти раніше за
+// монстрів і де не вибухне (кишеня — мало), і скільки часу до монстрів у ній самій
+function openness(bot, board, i, t, ms, danger, mon, spare, reach) {
+  const r = bfs(bot, board, i, t, ms, danger, null, mon, spare, -1, ROOM_DEPTH);
+  let n = 0;
+  for (let j = 0; j < r.dist.length; j++) if (r.dist[j] >= 0 && danger[j] === Infinity) n++;
+  return Math.min(n, 25) * 200 + Math.min(reach[i] - t, 5000) * 0.3;
+}
 
 // Чи можна вийти з клітинки c, вирушивши в момент t, туди, де не вибухне (без огляду на монстрів)
 function canLeave(bot, board, c, t, ms, danger, L) {
@@ -503,7 +534,8 @@ function pathTo(r, goal) {
 }
 
 // Чи можна боту поставити бомбу тут (для хоста)
-export const botCanPlace = (bot, board) => board.activeOf(bot.o) < bot.nb && canPlace(board, Math.round(bot.x), Math.round(bot.y));
+export const botCanPlace = (bot, board) => board.activeOf(bot.o) < bot.nb && canPlace(board, Math.round(bot.x), Math.round(bot.y))
+  && !board.fireAt(board.idx(Math.round(bot.x), Math.round(bot.y)));
 
 // Детонатор: яку свою бомбу підірвати зараз (null — жодну). Підриваємо, щойно самі (де стоїмо, куди йдемо і куди за шляхом
 // зайдемо, поки горітиме) і, в «Команді», свої поза її вогнем (з ланцюжком): коли вибухнула б звичайна або, якщо у вогні

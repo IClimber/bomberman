@@ -6,12 +6,12 @@ import {
   makeMap, Board, MON, WALL, PILLAR, BLOCK, FLAME_MS, Heap, RESIST_MS, MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS, FUSE_MS,
   IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE, DX, DY, cellOf,
 } from './sim.js';
-import { monsterStep } from './monsters.js';
+import { monsterStep, reachOne, TOUCH } from './monsters.js';
+export { TOUCH };
 import { botTick, botCanPlace, botDetonate } from './bots.js';
 
 export const COUNTDOWN_MS = 3000;    // відлік перед раундом
 export const END_GRACE_MS = 400;     // перед підсумком чекаємо dead від тих, хто загинув у тому самому вибуху
-export const TOUCH = 0.6;            // монстр ближче — убиває
 export const START_BOMBS = 1, START_FIRE = 2;
 export const MODE_VS = 0, MODE_COOP = 1;
 // Розум ботів (рівень LEVEL у bots.js): у «Один проти одного» — від складності, у «Команді» — завжди найкращий
@@ -155,7 +155,7 @@ export function hostStep(R, now, dt, ev) {
 // підривав блок, за яким монстр, чи ховався за бомбою, а за 2–3 с прохід відкривався — і монстр його затискав).
 export function monsterReach(R, now, danger = null) {
   const B = R.board, { GW, GH } = B.map, n = GW * GH;
-  const reach = new Float64Array(n).fill(Infinity), arr = new Float64Array(n), hops = new Float64Array(n);
+  const reach = new Float64Array(n).fill(Infinity);
   // з якого часу клітинка прохідна: openN — для звичайних монстрів, openG — для привида
   const openN = new Float64Array(n), openG = new Float64Array(n);
   for (let i = 0; i < n; i++) {
@@ -165,29 +165,14 @@ export function monsterReach(R, now, danger = null) {
     else if (c === BLOCK) { openG[i] = -Infinity; openN[i] = B.burn.has(i) ? B.burn.get(i) : later; }
     else openN[i] = openG[i] = -Infinity;
   }
-  const heap = new Heap();
+  reach.each = [];                                                 // кожен монстр окремо — для reachBlocked (bots.js)
+  reach.open = { openN, openG }; reach.now = now; reach.board = B;
   for (const m of R.mons) {
     if (!m.a) continue;
-    const kind = MON[m.k], step = 1000 / kind.speed, open = kind.ghost ? openG : openN;
-    const tx = m.tx ?? Math.round(m.x), ty = m.ty ?? Math.round(m.y), fx = Math.round(m.x), fy = Math.round(m.y);
-    arr.fill(Infinity);
-    for (const [x, y, d] of [[tx, ty, Math.abs(m.x - tx) + Math.abs(m.y - ty)], [fx, fy, Math.abs(m.x - fx) + Math.abs(m.y - fy)]]) {
-      const i = B.idx(x, y), t = now + d * step;
-      if (t < arr[i]) { arr[i] = t; hops[i] = d; heap.push(i, t); }
-    }
-    while (heap.size) {
-      const t = heap.top(), i = heap.pop();
-      if (t > arr[i]) continue;
-      if (t - TOUCH * step < reach[i]) reach[i] = t - TOUCH * step;
-      if (hops[i] > 12) continue;                                  // далі — не загроза
-      const x = i % GW, y = (i - x) / GW;
-      for (let d = 1; d <= 4; d++) {
-        const j = (y + DY[d]) * GW + x + DX[d], o = open[j];
-        if (o === Infinity) continue;
-        const tj = (o > t ? o : t) + step;
-        if (tj < arr[j]) { arr[j] = tj; hops[j] = hops[i] + 1; heap.push(j, tj); }
-      }
-    }
+    const r = new Float64Array(n).fill(Infinity);
+    reachOne(B, m, now, MON[m.k].ghost ? openG : openN, r);
+    for (let i = 0; i < n; i++) if (r[i] < reach[i]) reach[i] = r[i];
+    reach.each.push([m, r]);
   }
   return reach;
 }

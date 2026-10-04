@@ -1,7 +1,7 @@
 // monsters.js — монстри «Команди». Рухає їх лише хост, клієнти отримують позиції у world.
 // Монстр { i, k (вид, див. MON у sim.js), x, y, d (напрям), tx, ty (клітинка, куди йде), a (живий), mem (де бачив гравця) }
 // ходить від центру до центру клітинки; у центрі вибирає, куди далі.
-import { MON, DX, DY, FLAME_MS } from './sim.js';
+import { MON, DX, DY, FLAME_MS, Heap } from './sim.js';
 
 const BACK = [0, 3, 4, 1, 2];
 const KEEP = 0.75;                   // блукач іде прямо, якщо може, з такою ймовірністю
@@ -244,4 +244,49 @@ function pathDir(x0, y0, tx, ty, solid, GW, GH) {
     }
   }
   return 0;
+}
+
+// Коли монстр m найраніше може торкнутися того, хто в клітинці (див. monsterReach у round.js): Дейкстра за часом по клітинках,
+// open[i] — з якого часу клітинка для нього прохідна (Infinity — ніколи); out — мінімум з тим, що вже там є.
+// block — клітинка (уявна бомба), прохідна не раніше until. Далі 12 кроків — не загроза.
+export const TOUCH = 0.6;            // монстр ближче — убиває
+let arr = new Float64Array(0), hops = new Float64Array(0);
+const heap = new Heap();
+export function reachOne(B, m, now, open, out, block = -1, until = 0) {
+  const { GW } = B.map, n = out.length, step = 1000 / MON[m.k].speed;
+  if (arr.length !== n) { arr = new Float64Array(n); hops = new Float64Array(n); }
+  arr.fill(Infinity);
+  const tx = m.tx ?? Math.round(m.x), ty = m.ty ?? Math.round(m.y), fx = Math.round(m.x), fy = Math.round(m.y);
+  for (const [x, y, d] of [[tx, ty, Math.abs(m.x - tx) + Math.abs(m.y - ty)], [fx, fy, Math.abs(m.x - fx) + Math.abs(m.y - fy)]]) {
+    const i = B.idx(x, y), t = now + d * step;
+    if (t < arr[i]) { arr[i] = t; hops[i] = d; heap.push(i, t); }
+  }
+  while (heap.size) {
+    const t = heap.top(), i = heap.pop();
+    if (t > arr[i]) continue;
+    if (t - TOUCH * step < out[i]) out[i] = t - TOUCH * step;
+    if (hops[i] > 12) continue;
+    const x = i % GW, y = (i - x) / GW;
+    for (let d = 1; d <= 4; d++) {
+      const j = (y + DY[d]) * GW + x + DX[d];
+      let o = open[j];
+      if (j === block && o < until) o = until;
+      if (o === Infinity) continue;
+      const tj = (o > t ? o : t) + step;
+      if (tj < arr[j]) { arr[j] = tj; hops[j] = hops[i] + 1; heap.push(j, tj); }
+    }
+  }
+}
+
+// Досяжність, якщо в клітинці i з'явиться бомба, що вибухне й догорить до until: монстрам, які доходять до i,
+// шлях перераховуємо (крізь бомбу вони не пройдуть) — так бот бачить, що бомба на відступі — заслін
+export function reachBlocked(reach, i, until) {
+  if (!reach || !reach.each) return reach;
+  const hit = reach.each.filter(([, r]) => r[i] !== Infinity);
+  if (!hit.length) return reach;
+  const n = reach.length, out = new Float64Array(n).fill(Infinity);
+  for (const [, r] of reach.each) if (r[i] === Infinity) for (let j = 0; j < n; j++) if (r[j] < out[j]) out[j] = r[j];
+  const { openN, openG } = reach.open;
+  for (const [m] of hit) reachOne(reach.board, m, reach.now, MON[m.k].ghost ? openG : openN, out, i, until);
+  return out;
 }

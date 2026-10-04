@@ -515,3 +515,33 @@ test('«Команда»: люди загинули, боти живі — од�
   for (let k = 0; k < 20 && R.res === RES_GOING; k++) { t += 50; hostStep(R, t, 0.05, noop); }
   assert.deepEqual([R.p, R.res], [1, RES_TEAM_WIN]);
 });
+
+test('досяжність монстрів із бомбою-заслоном: за нею — не раніше, ніж вона догорить; монстрам, що туди не йдуть, — без змін', async () => {
+  const { reachBlocked } = await import('../js/monsters.js');
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1) });
+  const B = R.board = new Board(emptyMap(), 0), GW = B.map.GW;
+  for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [11, 2], [13, 2]]) B.cell[B.idx(x, y)] = BLOCK;   // коридор (1..13, 1)
+  R.mons = [{ i: 1, k: 1, x: 9, y: 1, d: 0, a: true }, { i: 2, k: 0, x: 1, y: 11, d: 0, a: true }];
+  const reach = monsterReach(R, 0), until = 3000;
+  const b = reachBlocked(reach, B.idx(6, 1), until);
+  assert.ok(reach[B.idx(4, 1)] < until);
+  assert.ok(b[B.idx(4, 1)] > until, `${b[B.idx(4, 1)]}`);           // за бомбою — лише після неї
+  assert.equal(b[B.idx(8, 1)], reach[B.idx(8, 1)]);                  // перед нею — як було
+  assert.equal(b[B.idx(1, 10)], reach[B.idx(1, 10)]);                // інший монстр — як було
+  assert.equal(reachBlocked(reach, B.idx(2, 2), until), reach);       // туди ніхто не доходить (стовп) — той самий масив
+});
+
+test('стійкий до вогню бот не ставить бомбу в клітинку, що горить (вибухнула б одразу — і так раз за разом)', () => withRandom(0.5, () => {
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(0, 1) });
+  const B = R.board = new Board(emptyMap(), 0), bot = R.sl[0];
+  for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [8, 1]]) B.cell[B.idx(x, y)] = BLOCK;
+  R.mons = [{ i: 1, k: 0, x: 7, y: 1, d: 0, a: true }];        // замкнений у (7, 1): вийти — лише у вогонь (6, 1)
+  Object.assign(bot, { x: 5, y: 1, fp: 2, rs: 20000, nb: 3 });
+  B.addBomb({ o: 0, n: 1, x: 5, y: 1, t: 0, p: 1 });             // перша — дальністю 1: монстра не зачепить
+  let inFire = 0;
+  for (let t = 50; t <= 6000; t += 50) {
+    hostStep(R, t, 0.05, { ...noop, bomb(b) { if (B.fireUntil[B.idx(b.x, b.y)] > t) inFire++; } });
+  }
+  assert.equal(inFire, 0);
+  assert.ok(bot.a);
+}));
