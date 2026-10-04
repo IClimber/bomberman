@@ -428,3 +428,14 @@ test('знімок для глядача: бомба з детонатором',
   }
   assert.equal(late.fireUntil[at(m, 1, 6)], host.fireUntil[at(m, 1, 6)]);
 });
+
+test('бомбу не можна поставити в клітинку, що горить', () => {
+  const m = emptyMap();
+  const b = new Board(m, 0);
+  b.addBomb({ o: 0, n: 1, x: 3, y: 1, t: 0, p: 1 });
+  b.advance(FUSE_MS + 100);
+  assert.equal(canPlace(b, 3, 1), false);              // горить
+  assert.equal(canPlace(b, 5, 1), true);
+  b.advance(FUSE_MS + FLAME_MS + 50);
+  assert.equal(canPlace(b, 3, 1), true);               // догоріло
+});

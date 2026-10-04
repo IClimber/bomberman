@@ -534,8 +534,7 @@ function pathTo(r, goal) {
 }
 
 // Чи можна боту поставити бомбу тут (для хоста)
-export const botCanPlace = (bot, board) => board.activeOf(bot.o) < bot.nb && canPlace(board, Math.round(bot.x), Math.round(bot.y))
-  && !board.fireAt(board.idx(Math.round(bot.x), Math.round(bot.y)));
+export const botCanPlace = (bot, board) => board.activeOf(bot.o) < bot.nb && canPlace(board, Math.round(bot.x), Math.round(bot.y));
 
 // Детонатор: яку свою бомбу підірвати зараз (null — жодну). Підриваємо, щойно самі (де стоїмо, куди йдемо і куди за шляхом
 // зайдемо, поки горітиме) і, в «Команді», свої поза її вогнем (з ланцюжком): коли вибухнула б звичайна або, якщо у вогні

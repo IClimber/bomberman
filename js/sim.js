@@ -583,8 +583,9 @@ export class Heap {
   }
 }
 
-// Розстановка бомби: клітинка, де стоїть гравець; не можна, якщо там уже бомба чи стіна
+// Розстановка бомби: клітинка, де стоїть гравець; не можна, якщо там уже бомба чи стіна або клітинка горить (бомба вибухнула б
+// одразу: стійкий до вогню ставив би й ставив під себе, і вогонь підривав би кожну наступну)
 export function canPlace(board, x, y) {
   const i = board.idx(x, y);
-  return board.cell[i] === EMPTY && !board.active.has(i);
+  return board.cell[i] === EMPTY && !board.active.has(i) && !board.fireAt(i);
 }
