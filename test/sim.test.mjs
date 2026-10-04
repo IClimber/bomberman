@@ -243,6 +243,28 @@ test('небезпека: дві бомби зачеплять клітинку 
   assert.equal(d.last[at(m, 9, 1)], -Infinity);
 });
 
+test('небезпека з view (помилки ботів): коротша дальність, без ланцюжка, бомби не видно; без view — як було', () => {
+  const m = emptyMap();
+  const b = new Board(m, 0);
+  b.addBomb({ o: 0, n: 1, x: 1, y: 1, t: 0, p: 2 });
+  b.addBomb({ o: 0, n: 2, x: 3, y: 1, t: 50, p: 2 });   // у вогні першої: ланцюжок
+  b.advance(100);
+  const plain = b.danger();
+  assert.deepEqual([...b.danger(undefined, null, true, -1, () => ({}))], [...plain]);
+  let d = b.danger(undefined, null, true, -1, (x) => x.n === 2 ? { p: 1 } : {});
+  assert.equal(d[at(m, 4, 1)], FUSE_MS);
+  assert.equal(d[at(m, 5, 1)], Infinity);            // бачить дальність 1
+  d = b.danger(undefined, null, true, -1, (x) => x.n === 2 ? { noChain: true } : {});
+  assert.equal(d[at(m, 3, 1)], FUSE_MS);             // вогонь першої дістає до неї
+  assert.equal(d[at(m, 5, 1)], 50 + FUSE_MS);        // а вибухне вона, на думку бота, за своїм запалом
+  d = b.danger(undefined, null, true, -1, (x) => x.n === 2 ? null : {});
+  assert.equal(d[at(m, 3, 1)], FUSE_MS);             // клітинку бомби зачепить перша
+  assert.equal(d[at(m, 5, 1)], Infinity);            // другої не видно
+  d = b.danger(undefined, null, true, -1, (x, te) => ({ te: te + 300 }));
+  assert.equal(d[at(m, 2, 1)], FUSE_MS + 300);
+  assert.equal(b.active.size, 2);
+});
+
 test('рух: по коридору, зупинка перед стіною, доворот у прохід, зійти зі своєї бомби', () => {
   const m = emptyMap();
   const b = new Board(m, 0);

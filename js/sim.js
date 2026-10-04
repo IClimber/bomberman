@@ -488,15 +488,26 @@ export class Board {
   // Свої бомби з детонатором (слот own) бот підриває сам, лише коли він поза їхнім вогнем (botDetonate): для нього вони не
   // вибухають, поки не підірвали чи не зачепив чужий вогонь, а клітинки їхнього вогню — d.mine[i] = 1: пройти можна,
   // стояти — ні (звідти не підірвати). Інакше своя бомба відрізала боту втечу від чужої, і він стояв під нею.
-  danger(horizon = FUSE_MS + FLAME_MS, skip = null, remote = true, own = -1) {
+  // view(бомба, справжній час вибуху) — як бот бачить бомбу («Один проти одного», помилки ботів): null — не бачить (як skip),
+  // { p — дальність, te — час вибуху, any — «будь-якої миті», noChain — не знає, що її раніше підірве ланцюжок }.
+  danger(horizon = FUSE_MS + FLAME_MS, skip = null, remote = true, own = -1, view = null) {
     const n = this.cell.length, d = new Float64Array(n).fill(Infinity), last = new Float64Array(n).fill(-Infinity);
     const anyCell = new Uint8Array(n), mine = new Uint8Array(n);
     const c = Object.create(Board.prototype);
     const active = new Map();
     for (const [i, a] of this.active) {
       if (skip && skip(a.b)) continue;
-      const any = remote && a.te === Infinity && a.b.o !== own;
-      active.set(i, { ...a, te: any ? Math.max(a.b.t + FUSE_MS, this.T + REMOTE_ESCAPE) : a.te, any });
+      let any = remote && a.te === Infinity && a.b.o !== own, te = any ? Math.max(a.b.t + FUSE_MS, this.T + REMOTE_ESCAPE) : a.te;
+      let b = a.b, noChain = false;
+      if (view) {
+        const v = view(a.b, a.te);
+        if (!v) continue;
+        if (v.p != null && v.p !== b.p) b = { ...b, p: v.p };
+        if (v.te != null) te = v.te;
+        if (v.any != null) any = v.any;
+        noChain = !!v.noChain;
+      }
+      active.set(i, { ...a, b, te, any, noChain });
     }
     Object.assign(c, this, {
       cell: Uint8Array.from(this.cell), item: Uint8Array.from(this.item), shown: Uint8Array.from(this.shown),
@@ -506,7 +517,10 @@ export class Board {
     let any = false;
     c.explode = (a, t) => {
       any = a.any;
+      const keep = [];
+      for (const o of c.active.values()) if (o.noChain) keep.push([o, o.te]);
       Board.prototype.explode.call(c, a, t);
+      for (const [o, te] of keep) o.te = te;                        // вогонь на ній зупиняється, але бот не знає, що вона вибухне
       if (any) for (const o of c.active.values()) if (o.te === t) o.any = true;   // ланцюжок від неї — теж будь-якої миті
       any = false;
     };

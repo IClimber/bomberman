@@ -9,6 +9,7 @@ import {
 } from '../js/sim.js';
 import { monsterReach, TOUCH } from '../js/round.js';
 import { monsterStep } from '../js/monsters.js';
+import { botDanger } from '../js/bots.js';
 
 const people = (n, bots = 0) => [
   ...Array.from({ length: n }, (_, k) => ({ i: 'player' + 'abcdefgh'[k] + '0000', b: false, c: k, n: 'P' + k })),
@@ -206,7 +207,7 @@ function botRound(diff, x, y) {
 }
 
 test('бот на довгому шляху помічає нову бомбу й не заходить у її вогонь', () => withRandom(0.5, () => {
-  const R = botRound(1, 1, 1), bot = R.sl[1], GW = R.board.map.GW;
+  const R = botRound(2, 1, 1), bot = R.sl[1], GW = R.board.map.GW;
   bot.sp = 1;                                         // 3,7 клітинки за секунду: кінець тіку не потрапляє в центр клітинки
   const path = [];
   for (let x = 2; x <= 11; x++) path.push(GW + x);
@@ -334,4 +335,34 @@ test('детонатор: від чужої бомби бот тікає крі�
     assert.ok(bot.a, `рівень ${diff}`);
     assert.ok(det > 0, `рівень ${diff}: не підірвав`);
   });
+});
+
+test('«Один проти одного», «Легко»: частину чужих бомб бачить з меншою дальністю (rangeMiss); «Важко» — усі точно', () => {
+  const end = (diff, n) => {                           // бот у (5, 1), у крайній клітинці променя бомби з (8, 1) дальністю 3
+    const R = botRound(diff, 5, 1), B = R.board;
+    B.addBomb({ o: 0, n, x: 8, y: 1, t: 0, p: 3 });
+    B.advance(2000);                                   // уже помітив (react)
+    return botDanger(R.sl[1], { board: B, now: 2000, diff, coop: false, danger: () => B.danger() })[B.idx(5, 1)];
+  };
+  const ns = Array.from({ length: 20 }, (_, k) => k + 1);
+  assert.ok(ns.every(n => end(2, n) === FUSE_MS));
+  const missed = ns.filter(n => end(0, n) === Infinity).length;
+  assert.ok(missed >= 4 && missed <= 16, `не бачить ${missed} з 20`);
+});
+
+test('«Команда»: помилки рівня не діють — бот тікає від бомби товариша однаково на всіх рівнях', () => {
+  const path = (bd) => withRandom(0.5, () => {
+    const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 0, t0: 0, sl: people(1, 1) });
+    R.board = new Board(emptyMap(), 0);
+    R.mons = [];
+    R.bd = bd;
+    Object.assign(R.sl[0], { x: 9, y: 1 });
+    Object.assign(R.sl[1], { x: 5, y: 1 });
+    R.board.addBomb({ o: 0, n: 1, x: 8, y: 1, t: 0, p: 3 });
+    const cells = [];
+    for (let t = 50; t <= FUSE_MS + 600; t += 50) { hostStep(R, t, 0.05, noop); cells.push(Math.round(R.sl[1].x) + ',' + Math.round(R.sl[1].y)); }
+    assert.ok(R.sl[1].a);
+    return cells.join(' ');
+  });
+  assert.equal(path(0), path(2));
 });

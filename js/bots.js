@@ -3,7 +3,8 @@
 // Раз на LEVEL.think мс: у небезпеці — тікає до найближчої безпечної клітинки; інакше обирає ціль
 // (бонус, клітинку, звідки вибух зачепить блоки чи суперників / монстрів) і ставить бомбу,
 // лише якщо після неї є куди втекти.
-import { DX, DY, FUSE_MS, FLAME_MS, BLOCK, PILLAR, WALL, speedOf, canPlace } from './sim.js';
+import { DX, DY, FUSE_MS, FLAME_MS, BLOCK, PILLAR, WALL, speedOf, canPlace, hashStr, bombKey,
+  IT_BOMB, IT_FIRE, IT_RESIST } from './sim.js';
 import { stepTo } from './monsters.js';
 
 // Складність: think — як часто думає (мс; vsThink — у «Один проти одного»); slip — імовірність не помітити небезпеку цього разу;
@@ -14,11 +15,14 @@ import { stepTo } from './monsters.js';
 // hold — скільки (мс) монстр не повинен устигнути дійти туди, де бот стоїть;
 // detAge — бомбу з детонатором, у вогні якої суперник (монстр), підриває не раніше, ніж за стільки мс після того, як поставив
 // (інакше людина не встигає й помітити бомбу); без суперника у вогні — коли вибухнула б звичайна (FUSE_MS);
-// решта полів — лише «Один проти одного», див. DEF
+// решта полів — помилки й атака лише в «Один проти одного», див. DEF (за замовчуванням — без помилок, як «Важко»)
 const LEVEL = [
-  { think: 450, vsThink: 600, slip: 0.3, aggro: 0.5, spare: 650, react: 1600, detAge: FUSE_MS,
-    foe: 1, pressure: 0, pull: 0, maxBombs: 1, items: [], roamFoes: false },
-  { think: 250, slip: 0.08, aggro: 0.8, spare: 400, react: 600, cross: 200, hold: 700, detAge: 1800 },
+  { think: 450, vsThink: 600, slip: 0.3, aggro: 0.5, spare: 450, react: 1600, detAge: FUSE_MS,
+    rangeMiss: [0.5, 2], fuseMiss: 0.3, chainMiss: 1, sight: 5, remoteMiss: 1, wallSoon: 2000, careless: 0.15, misstep: 0.1,
+    foe: 0, pressure: 0, pull: 0, maxBombs: 1, near: 3, look: 10, items: [], detHunt: 0, roamFoes: false },
+  { think: 250, slip: 0.15, aggro: 0.7, spare: 350, react: 600, cross: 200, hold: 700, detAge: 1800,
+    rangeMiss: [0.4, 1], fuseMiss: 0.25, chainMiss: 0.5, sight: 8, remoteMiss: 0.5, wallSoon: 3000, careless: 0.05, misstep: 0.04,
+    foe: 2, pressure: 0.3, pull: 0.06, maxBombs: 1, look: 12, items: [IT_BOMB, IT_FIRE, IT_RESIST], detHunt: 0.5 },
   { think: 120, slip: 0, aggro: 1, spare: 350, cross: 0, hold: 800, detAge: 1000 },
 ];
 const LOOK = 14;                     // ціль шукаємо не далі стількох кроків
@@ -34,6 +38,17 @@ const LAST_SPARE = 120;              // втеча без запасу spare: з
 
 // Поля рівня лише для «Один проти одного»; за замовчуванням — без помилок (як «Важко»)
 const DEF = {
+  // А. Як бот бачить чужі бомби (помилка — стабільна на бомбу, roll)
+  rangeMiss: [0, 0],                 // [p, k]: з імовірністю p бачить дальність чужої бомби на 1..k менше (не менше 1)
+  fuseMiss: 0,                       // думає, що чужа бомба вибухне пізніше на 0..fuseMiss·FUSE_MS
+  chainMiss: 0,                      // з імовірністю не бачить, що цю бомбу раніше підірве ланцюжок
+  sight: Infinity,                   // чужі бомби далі за стільки клітинок (|dx| + |dy|) не бачить зовсім
+  remoteMiss: 0,                     // з імовірністю вважає чужу бомбу з детонатором звичайною, доки не мине її запал
+  wallSoon: WALL_SOON,               // замість WALL_SOON
+  // Б. Втеча
+  careless: 0,                       // на рішенні з імовірністю перевіряє «чи втечу від своєї бомби» без чужих бомб
+  misstep: 0,                        // на рішенні «тікати» з імовірністю — крок у випадкову сусідню клітинку без вогню
+  // В. Атака
   foe: 4,                            // цінність суперника у вогні
   pressure: 1,                       // імовірність (на рішення) бомби «для тиску» на суперника за 2 клітинки
   pull: 0.12,                        // тяга до суперників (бали за клітинку)
@@ -42,8 +57,9 @@ const DEF = {
   look: LOOK,                        // замість LOOK
   items: null,                       // які бонуси бот шукає (IT_*); null — усі; [] — жодних (підбирає лише випадково)
   roamFoes: true,                    // без цілей іде в бік суперників (false — лише до блоків, нема блоків — навмання поблизу)
-  wallSoon: WALL_SOON,               // замість WALL_SOON
+  detHunt: 1,                        // імовірність (на бомбу), що бомбу з детонатором підірве раніше, коли суперник у вогні
 };
+const misSees = L => L.rangeMiss[0] || L.fuseMiss || L.chainMiss || L.sight !== Infinity || L.remoteMiss;
 const COOP_KEYS = ['think', 'slip', 'aggro', 'spare', 'cross', 'hold', 'detAge'];
 // Рівень бота: у «Команді» — лише спільні поля (решта — DEF: там боти завжди без помилок)
 function level(bot, ctx) {
@@ -54,6 +70,8 @@ function level(bot, ctx) {
   return L;
 }
 const chance = p => p >= 1 || (p > 0 && Math.random() < p);
+// Помилка «на бомбу»: та сама бомба для того самого бота завжди виглядає однаково, [0, 1)
+const roll = (b, o, salt) => hashStr(bombKey(b) + ':' + o + ':' + salt) / 4294967296;
 
 const BACK = [0, 3, 4, 1, 2];
 
@@ -65,14 +83,8 @@ export function botTick(bot, dt, ctx) {
   const ai = bot.ai || (bot.ai = { next: 0, seen: -1, path: [], bomb: false, tx: null, ty: null, goal: -1, roam: false, allyWait: 0, tabu: new Map() });
   if (ai.tx == null) { ai.tx = Math.round(bot.x); ai.ty = Math.round(bot.y); }
   const board = ctx.board, GW = board.map.GW;
-  // Реакція («Один проти одного», react): чужу бомбу бот помічає через react мс після того, як її поставили, —
-  // доти не тікає від неї й не зважає на неї, вибираючи шлях
-  let bombs = board.bombs.size;
-  if (L.react && !ctx.coop) {
-    const fresh = b => b.o !== bot.o && b.t + L.react > ctx.now;
-    for (const b of board.bombs.values()) if (fresh(b)) bombs--;
-    if (bombs < board.bombs.size) { let d = null; ctx = { ...ctx, danger: () => d || (d = board.danger(undefined, fresh, true, bot.o)) }; }
-  }
+  const seen = sees(bot, ctx, L), bombs = seen.bombs;
+  if (seen.danger) ctx = { ...ctx, danger: seen.danger };
   let dist = speedOf(bot.sp) * dt;
   bot.mv = false;
   // Рух за шляхом від центру до центру. Стоїть — думає раз на think мс; іде — в центрі клітинки (і посеред тіку), лише
@@ -112,6 +124,40 @@ export function botTick(bot, dt, ctx) {
   return false;
 }
 
+// Як бот бачить бомби («Один проти одного»). Реакція (react): чужу бомбу помічає через react мс після того, як її
+// поставили, — доти не тікає від неї й не зважає на неї, вибираючи шлях. Помилки (поля А, DEF): Board.danger з view.
+// { bombs — скільки бомб бот бачить (нова — думати), danger — небезпека для нього (null — та сама, що в ctx) }
+function sees(bot, ctx, L) {
+  const board = ctx.board, GW = board.map.GW;
+  let bombs = board.bombs.size, d = null;
+  if (ctx.coop) return { bombs, danger: null };
+  if (misSees(L)) {
+    const bx = Math.round(bot.x), by = Math.round(bot.y);
+    const fresh = b => L.react && b.o !== bot.o && b.t + L.react > ctx.now;
+    const view = (b, te) => {
+      if (b.o === bot.o) return {};
+      if (Math.abs(b.x - bx) + Math.abs(b.y - by) > L.sight) return null;
+      const v = {};
+      if (L.rangeMiss[0] && roll(b, bot.o, 1) < L.rangeMiss[0]) v.p = Math.max(1, b.p - 1 - Math.floor(roll(b, bot.o, 2) * L.rangeMiss[1]));
+      if (te === Infinity) {
+        if (L.remoteMiss && ctx.now < b.t + FUSE_MS && roll(b, bot.o, 3) < L.remoteMiss) { v.te = b.t + FUSE_MS; v.any = false; }
+      } else if (L.fuseMiss) v.te = te + roll(b, bot.o, 4) * L.fuseMiss * FUSE_MS;
+      if (L.chainMiss && roll(b, bot.o, 5) < L.chainMiss) v.noChain = true;
+      return v;
+    };
+    for (const b of board.bombs.values()) {
+      if (fresh(b) || b.o !== bot.o && Math.abs(b.x - bx) + Math.abs(b.y - by) > L.sight && board.active.get(b.y * GW + b.x)?.b === b) bombs--;
+    }
+    return { bombs, danger: () => d || (d = board.danger(undefined, fresh, true, bot.o, view)) };
+  }
+  if (!L.react) return { bombs, danger: null };
+  const fresh = b => b.o !== bot.o && b.t + L.react > ctx.now;
+  for (const b of board.bombs.values()) if (fresh(b)) bombs--;
+  return { bombs, danger: bombs < board.bombs.size ? () => d || (d = board.danger(undefined, fresh, true, bot.o)) : null };
+}
+// Небезпека так, як її бачить бот (для тестів)
+export const botDanger = (bot, ctx) => (sees(bot, ctx, level(bot, ctx)).danger || ctx.danger)();
+
 function think(bot, ai, ctx, L) {
   const { board, now } = ctx, GW = board.map.GW;
   const c = ai.ty * GW + ai.tx;
@@ -127,6 +173,14 @@ function think(bot, ai, ctx, L) {
   ai.roam = false;
   if (!here || cramped) {
     if (ai.path.length && Math.random() < L.slip) return;          // «не помітив» — іде, куди йшов
+    if (!ctx.coop && chance(L.misstep)) {                          // помилився — крок навмання (не у вогонь)
+      const x = ai.tx, y = ai.ty, opts = [];
+      for (let d = 1; d <= 4; d++) {
+        const j = (y + DY[d]) * GW + x + DX[d];
+        if (!board.solid(x + DX[d], y + DY[d], false, bot.ps) && !board.fireAt(j)) opts.push(j);
+      }
+      if (opts.length) { ai.path = [opts[Math.floor(Math.random() * opts.length)]]; ai.bomb = false; ai.next = 0; return; }
+    }
     // монстр близько, а бомба є — ставимо заслін (крізь бомбу монстр не пройде) і тікаємо від неї
     if (ctx.reach && danger[c] === Infinity && !danger.mine[c] && canBomb && canPlace(board, ai.tx, ai.ty) && !hitsAlly(board, c, bot.fp, ctx)
       && canEscape(bot, board, c, now, ms, danger, mon, L.spare, roomy, L.wallSoon)) {
@@ -171,8 +225,12 @@ function think(bot, ai, ctx, L) {
   }
   // Безпечно: шукаємо ціль
   const r = bfs(bot, board, c, now, ms, danger, null, mon, L.spare);
+  // careless: цього разу «чи втечу від своєї бомби» — не зважаючи на чужі бомби
+  const blind = !ctx.coop && chance(L.careless);
+  let ownOnly = null;
+  const escDanger = () => !blind ? danger : ownOnly || (ownOnly = board.danger(undefined, b => b.o !== bot.o, true, bot.o));
   // Спершу — бомба тут, якщо є що зачепити і куди втекти (інакше бот бігає туди-назад між «кращими» клітинками)
-  const esc = canBomb && canEscape(bot, board, c, now, ms, danger, mon, L.spare, roomy, L.wallSoon);
+  const esc = canBomb && canEscape(bot, board, c, now, ms, escDanger(), mon, L.spare, roomy, L.wallSoon);
   if (esc && blastValue(board, c, bot.fp, ctx, foe) + (chance(L.pressure) ? pressure(ctx, c, GW) : 0) > 0) {
     ai.path = []; ai.goal = -1; ai.allyWait = 0;
     if (Math.random() < L.aggro) ai.bomb = true;                   // не наважився — вагається тут
@@ -214,7 +272,7 @@ function think(bot, ai, ctx, L) {
   cand.sort((a, b) => b.score - a.score);
   for (const k of cand.slice(0, 6)) {
     if (k.bv > 0 && k.v <= 4) {                                    // ціль — вибух: має бути куди втекти
-      if (!canEscape(bot, board, k.i, now + k.d * ms, ms, danger, mon, L.spare, roomy, L.wallSoon)) continue;
+      if (!canEscape(bot, board, k.i, now + k.d * ms, ms, escDanger(), mon, L.spare, roomy, L.wallSoon)) continue;
     } else if (k.v <= 0 && k.bv <= 0) continue;
     ai.path = pathTo(r, k.i);
     ai.goal = k.i; ai.allyWait = 0;
@@ -411,7 +469,8 @@ export function botDetonate(bot, ctx) {
     if (fire.has(at(bot)) || soon.some(j => fire.has(j))) continue;
     if (ctx.coop && ctx.allies.some(e => fire.has(at(e)))) continue;
     const age = now - a.b.t;
-    if (age >= FUSE_MS || (age >= L.detAge && ctx.enemies.some(e => fire.has(at(e))))) return a;
+    if (age >= FUSE_MS || (age >= L.detAge && ctx.enemies.some(e => fire.has(at(e)))
+      && (L.detHunt >= 1 || (L.detHunt > 0 && roll(a.b, bot.o, 6) < L.detHunt)))) return a;
   }
   return null;
 }
