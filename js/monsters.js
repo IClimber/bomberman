@@ -18,7 +18,7 @@ const SCENT = 6, LUNGE = 3, WAIT_NEAR = 3, WAIT_DEPTH = 6;            // при�
 export const LEVEL = [
   { hunt: 0.3, range: 5, safe: 0, look: 0, notice: 0, sight: 0, memory: 0 },
   { hunt: 0.6, range: 8, safe: 2, look: 1500, notice: 0.9, sight: 4, memory: 6000, scent: 0.2, wait: true, lunge: 0.3 },
-  { hunt: 0.8, range: 10, safe: 2, look: 1500, notice: 0.9, sight: 4, memory: 6000, scent: 0.3, wait: true, lunge: 0.5 },
+  { hunt: 0.8, range: 10, safe: 2, look: 1500, notice: 0.97, sight: 4, memory: 6000, scent: 0.3, wait: true, lunge: 0.5 },
 ];
 
 // targets — живі гравці { x, y }; ctx: { now, t0 (початок раунду), diff, danger() → Float64Array (див. Board.danger) }
