@@ -114,7 +114,8 @@ export function hostStep(R, now, dt, ev) {
     };
     if (botTick(s, dt, ctx) && botCanPlace(s, B)) {
       s.bn = Math.max(s.bn, B.maxN[s.o] || 0) + 1;                // новий хост продовжує нумерацію
-      const b = { o: s.o, n: s.bn, x: Math.round(s.x), y: Math.round(s.y), t: now, p: s.fp, rc: s.rc };
+      // події — не в минулому поля (час міг піти назад), інакше перерахунок з початку (Board.advance)
+      const b = { o: s.o, n: s.bn, x: Math.round(s.x), y: Math.round(s.y), t: Math.max(now, B.T), p: s.fp, rc: s.rc };
       B.addBomb(b);
       B.advance(now);
       dangerCache = null;
@@ -123,7 +124,7 @@ export function hostStep(R, now, dt, ev) {
     }
     const a = s.rc && botDetonate(s, ctx);
     if (a) {
-      const e = { o: s.o, n: a.b.n, b: a.b.t, t: now };
+      const e = { o: s.o, n: a.b.n, b: a.b.t, t: Math.max(now, B.T) };
       B.addDet(e);
       B.advance(now);
       dangerCache = null; monDanger = null;
@@ -132,7 +133,7 @@ export function hostStep(R, now, dt, ev) {
     }
     const cx = Math.round(s.x), cy = Math.round(s.y), it = B.itemAt(B.idx(cx, cy));
     if (it && Math.abs(s.x - cx) + Math.abs(s.y - cy) < 0.5) {
-      const p = { o: s.o, x: cx, y: cy, t: now };
+      const p = { o: s.o, x: cx, y: cy, t: Math.max(now, B.T) };
       B.addPick(p);
       B.advance(now);
       applyItem(s, it, now);

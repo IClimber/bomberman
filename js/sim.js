@@ -237,6 +237,12 @@ export class Board {
     this.onBlast = null;
     this.blasted = new Set();        // ключі бомб, що вже вибухали
     this.live = true;                // false — лише в копії для danger: там вибухи уявні
+    // Детектор «блок відновився»: перерахунок (reset) через подію з часом у минулому (lateBy — остання така) не мав би
+    // повертати зруйновані блоки; якщо повернув — onRevive(клітинки, lateBy). Порівнюємо, щойно перерахунок дійшов до
+    // моменту, де був до нього (revCheck)
+    this.onRevive = null;
+    this.lateBy = null;
+    this.revCheck = null;
     this.reset();
   }
 
@@ -261,6 +267,7 @@ export class Board {
       if (until > T && cell[i] === EMPTY && this.cell[i] === BLOCK) { cell[i] = BLOCK; shown[i] = 0; burn.set(i, until); }
     }
     this.base = { cell, item, shown, T, active: active.map(b => this.bombs.get(bombKey(b))), flames, burn };
+    this.revCheck = null;
     this.reset();
     return true;
   }
@@ -302,7 +309,7 @@ export class Board {
     this.bombs.set(k, bb);
     if (bb.n > (this.maxN[bb.o] || 0)) this.maxN[bb.o] = bb.n;
     if (quiet) this.blasted.add(k);
-    if (bb.t < this.T) this.dirty = true;
+    if (bb.t < this.T) { this.dirty = true; this.lateBy = { kind: 'bomb', key: k, t: bb.t, T: this.T }; }
     else {
       let j = this.queue.length;
       while (j > 0 && bombLess(this.queue[j - 1], bb)) j--;
@@ -315,16 +322,26 @@ export class Board {
   addEvent(all, q, k, e) {
     if (all.has(k)) return false;
     all.set(k, e);
-    if (e.t < this.T) this.dirty = true;
+    if (e.t < this.T) { this.dirty = true; this.lateBy = { kind: all === this.picks ? 'pick' : 'det', key: k, t: e.t, T: this.T }; }
     else enqueue(q, e);
     return true;
   }
 
   advance(T) {
-    if (this.dirty) this.reset();
+    if (this.dirty) {
+      if (this.onRevive && !this.revCheck) this.revCheck = { cell: Uint8Array.from(this.cell), T: this.T, by: this.lateBy };
+      this.reset();
+    }
     this.run(T);
     if (T > this.T) this.T = T;
     this.flames = this.flames.filter(f => f.t1 > this.T);
+    const rc = this.revCheck;
+    if (rc && this.T >= rc.T) {                                    // (advance у минуле — порівняємо пізніше)
+      this.revCheck = null;
+      const cells = [];
+      for (let i = 0; i < this.cell.length; i++) if (rc.cell[i] === EMPTY && this.cell[i] === BLOCK) cells.push(i);
+      if (cells.length) this.onRevive(cells, rc.by);
+    }
   }
 
   run(T) {
@@ -475,7 +492,7 @@ export class Board {
     for (const [all, keep] of [[this.bombs, keepBomb], [this.picks, keepPick], [this.dets, keepDet]]) {
       for (const [k, e] of all) if (!keep(e)) { all.delete(k); n++; }
     }
-    if (n) this.dirty = true;
+    if (n) { this.dirty = true; this.lateBy = { kind: 'drop', key: '', t: -Infinity, T: this.T }; }
     return n;
   }
   // Контрольна сума подій (бомби, підбори, детонатор) з часом ≤ T: кількість і сума хешів
@@ -522,7 +539,7 @@ export class Board {
     }
     Object.assign(c, this, {
       cell: Uint8Array.from(this.cell), item: Uint8Array.from(this.item), shown: Uint8Array.from(this.shown),
-      fireUntil: Float64Array.from(this.fireUntil), burn: new Map(this.burn), flames: [], live: false,
+      fireUntil: Float64Array.from(this.fireUntil), burn: new Map(this.burn), flames: [], live: false, onRevive: null, revCheck: null,
       active, queue: [], pickQ: [], detQ: this.detQ.slice(),
     });
     let any = false;

@@ -439,3 +439,22 @@ test('бомбу не можна поставити в клітинку, що г
   b.advance(FUSE_MS + FLAME_MS + 50);
   assert.equal(canPlace(b, 3, 1), true);               // догоріло
 });
+
+test('блок «відновлюється» лише від перерахунку з пізньою подією — детектор onRevive це бачить', () => {
+  const m = emptyMap();
+  m.cell[at(m, 3, 1)] = BLOCK;
+  const b = new Board(m, 0), seen = [];
+  b.onRevive = (cells, by) => seen.push({ cells, by });
+  b.addBomb({ o: 0, n: 1, x: 1, y: 1, t: 1000, p: 2 });
+  b.advance(1000 + FUSE_MS + FLAME_MS + 100);
+  assert.equal(b.cell[at(m, 3, 1)], EMPTY);
+  // запізніла бомба в ту саму клітинку, раніша: тепер стоїть вона (дальність 1), а бомби A в перерахунку немає
+  b.addBomb({ o: 1, n: 1, x: 1, y: 1, t: 900, p: 1 });
+  b.advance(1000 + FUSE_MS + FLAME_MS + 150);
+  assert.equal(b.cell[at(m, 3, 1)], BLOCK);
+  assert.equal(seen.length, 1);
+  assert.deepEqual(seen[0].cells, [at(m, 3, 1)]);
+  assert.equal(seen[0].by.kind, 'bomb');
+  assert.equal(seen[0].by.t, 900);
+  assert.equal(seen[0].by.key, '1:1:900');
+});

@@ -56,6 +56,8 @@ hooks.round = () => {
   if (R && cue.r !== R.r) {
     cue = { r: R.r, beep: 99, sd: false, end: false };
     R.board.onBlast = () => sfx.blast();
+    R.board.onRevive = (cells, by) => console.warn('bomberman: блоки відновились після перерахунку', {
+      cells: cells.map(i => [i % R.board.map.GW, Math.floor(i / R.board.map.GW)]), lateBy: by, now: net.sharedNow(), T: R.board.T });
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     held.length = 0;
   }
@@ -137,7 +139,8 @@ function stepMe(R, now, dt) {
     wantBomb = false;
     const x = Math.round(s.x), y = Math.round(s.y);
     if (B.activeOf(s.o) < s.nb && canPlace(B, x, y)) {
-      const b = { o: s.o, n: ++s.bn, x, y, t: now, p: s.fp, rc: s.rc };
+      // свої події — не в минулому поля (годинник міг піти назад, кадр — випередити тік хоста): інакше перерахунок з початку
+      const b = { o: s.o, n: ++s.bn, x, y, t: Math.max(now, B.T), p: s.fp, rc: s.rc };
       B.addBomb(b);
       B.advance(now);
       net.send('bomb', { r: R.r, ...b });
@@ -148,7 +151,7 @@ function stepMe(R, now, dt) {
     wantDet = false;
     const a = B.remoteOf(s.o)[0];
     if (a) {
-      const e = { o: s.o, n: a.b.n, b: a.b.t, t: now };
+      const e = { o: s.o, n: a.b.n, b: a.b.t, t: Math.max(now, B.T) };
       B.addDet(e);
       B.advance(now);
       net.send('det', { r: R.r, ...e });
@@ -156,7 +159,7 @@ function stepMe(R, now, dt) {
   }
   const cx = Math.round(s.x), cy = Math.round(s.y), it = B.itemAt(B.idx(cx, cy));
   if (it) {
-    const p = { o: s.o, x: cx, y: cy, t: now };
+    const p = { o: s.o, x: cx, y: cy, t: Math.max(now, B.T) };
     B.addPick(p);
     B.advance(now);
     applyItem(s, it, now);

@@ -631,3 +631,17 @@ test('«Команда»: ціль у кишені, вихід з якої мо�
   const q = pocketRun([[13, 11, 0]], 1, { fp: 2 }, 2000);
   assert.ok(q.bombs.some(b => b.x === 1 && b.y === 1), 'монстр далеко, а до блоку в кишені не пішов');
 }));
+
+test('крок хоста, коли час пішов назад (поле вже далі): подія бота — з часом поля, без перерахунку', () => withRandom(0.5, () => {
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(0, 1) });
+  const B = R.board = new Board(emptyMap(), 0), bot = R.sl[0];
+  for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [10, 1]]) B.cell[B.idx(x, y)] = BLOCK;   // коридор (1..9, 1)
+  R.mons = [{ i: 1, k: 0, x: 1, y: 1, d: 0, a: true }, { i: 2, k: 0, x: 9, y: 1, d: 0, a: true }];
+  Object.assign(bot, { x: 5, y: 1, fp: 1 });                       // затиснутий — бомба під себе
+  B.advance(2000);                                                 // кадр випередив тік хоста
+  let bomb = null;
+  for (let t = 50; t < 2000 && !bomb; t += 50) hostStep(R, t, 0.05, { ...noop, bomb(b) { bomb = b; } });
+  assert.ok(bomb, 'бомби немає');
+  assert.equal(bomb.t, 2000);
+  assert.equal(B.dirty, false);
+}));
