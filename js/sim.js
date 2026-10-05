@@ -15,7 +15,7 @@ export const MAX_SPEED_UPS = 4, MAX_BOMBS = 8, MAX_FIRE = 8;
 export const SD_BASE_MS = 180000;    // раптова смерть на 13×11; росте як √площі
 export const SD_STEP_BASE_MS = 250;  // крок спіралі на 13×11; на більших картах — частіше
 export const MONSTER_PER = 25;       // один монстр на стільки вільних клітинок (× DIFF_K)
-export const DIFF_K = [0.6, 1.15, 1.5]; // множник кількості монстрів: легко, нормально, важко
+export const DIFF_K = [0.6, 1.15, 2.05]; // множник кількості монстрів: легко, нормально, важко
 export const MON_PLUS = [0, 0.5, 1]; // і ще стільки монстрів, до округлення (на малій карті інакше легше, ніж на великій)
 
 // Клітинки
@@ -30,7 +30,9 @@ export const MON = [
   { speed: 1.3, ghost: true },
 ];
 export const MON_MIX = [[0.6, 0.3, 0.1], [0.2, 0.6, 0.2], [0.2, 0.5, 0.3]];
-const MON_SAFE = 5, GHOST_SAFE = 8;  // монстри (привиди) з'являються не ближче (по сітці) до місць старту
+export const MON_SAFE = [5, 5, 8];   // монстри з'являються не ближче (по сітці) до місць старту — за складністю
+                                     // («Важко» — 8: з 5 боти гинули переважно в перші 30 с і результат вирішував старт)
+const GHOST_SAFE = 8;                // привиди — не ближче
 
 // Напрями: 0 — стоїть, 1 вгору, 2 вправо, 3 вниз, 4 вліво
 export const DX = [0, 0, 1, 0, -1], DY = [0, -1, 0, 1, 0];
@@ -101,7 +103,7 @@ export function makeMap(seed, sizeIdx, coop = false, diff = 1) {
     for (let y = 1; y <= h; y++) {
       for (let x = 1; x <= w; x++) {
         if (cell[y * GW + x] === PILLAR) continue;
-        if (spawns.every(([sx, sy]) => Math.abs(sx - x) + Math.abs(sy - y) >= MON_SAFE)) far.push(y * GW + x);
+        if (spawns.every(([sx, sy]) => Math.abs(sx - x) + Math.abs(sy - y) >= (MON_SAFE[diff] ?? 5))) far.push(y * GW + x);
       }
     }
     shuffle(far, rnd);

@@ -41,7 +41,7 @@ test('карта «Команди»: монстри далеко від стар
     const m = makeMap(99, 0, true, d);
     assert.ok(m.mons.length >= 1);
     for (const mo of m.mons) {
-      for (const [sx, sy] of m.spawns) assert.ok(Math.abs(sx - mo.x) + Math.abs(sy - mo.y) >= (mo.k === 2 ? 8 : 5));
+      for (const [sx, sy] of m.spawns) assert.ok(Math.abs(sx - mo.x) + Math.abs(sy - mo.y) >= (mo.k === 2 || d === 2 ? 8 : 5));
       const c = m.cell[at(m, mo.x, mo.y)];
       assert.notEqual(c, PILLAR);
       if (mo.k !== 2) assert.equal(c, EMPTY);
