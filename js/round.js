@@ -8,7 +8,7 @@ import {
 } from './sim.js';
 import { monsterStep, reachOne, TOUCH } from './monsters.js';
 export { TOUCH };
-import { botTick, botCanPlace, botDetonate } from './bots.js';
+import { botTick, botCanPlace, botDetonate, pockets } from './bots.js';
 
 export const COUNTDOWN_MS = 3000;    // відлік перед раундом
 export const END_GRACE_MS = 400;     // перед підсумком чекаємо dead від тих, хто загинув у тому самому вибуху
@@ -101,13 +101,14 @@ export function hostStep(R, now, dt, ev) {
     }
   }
   const reach = R.coop && R.bd > 0 && R.sl.some(s => s.a && s.b) ? monsterReach(R, now, danger()) : null;   // лише коли є кому
+  const pk = reach ? pockets(B) : null;                            // глухі кути (для ботів «Команди»)
   for (const s of R.sl) {
     if (!s.a || !s.b) continue;
     const others = R.sl.filter(e => e.a && e !== s);
     let mine = null;                                               // свої бомби з детонатором бот підірве сам (Board.danger)
     const own = B.remoteOf(s.o).length ? () => mine || (mine = B.danger(undefined, null, true, s.o)) : danger;
     const ctx = {
-      board: B, now, diff: R.bd, coop: R.coop, danger: own, reach,
+      board: B, now, diff: R.bd, coop: R.coop, danger: own, reach, pk,
       enemies: R.coop ? R.mons.filter(m => m.a) : others, allies: R.coop ? others : [],
       monsters: R.coop ? R.mons.filter(m => m.a) : null,
     };

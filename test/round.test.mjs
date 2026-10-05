@@ -9,7 +9,7 @@ import {
 } from '../js/sim.js';
 import { monsterReach, TOUCH } from '../js/round.js';
 import { monsterStep } from '../js/monsters.js';
-import { botDanger } from '../js/bots.js';
+import { botDanger, pockets } from '../js/bots.js';
 
 const people = (n, bots = 0) => [
   ...Array.from({ length: n }, (_, k) => ({ i: 'player' + 'abcdefgh'[k] + '0000', b: false, c: k, n: 'P' + k })),
@@ -568,4 +568,66 @@ test('«Команда»: на своїй бомбі з детонатором �
   for (let t = 50; t <= 12000 && !det; t += 50) hostStep(R, t, 0.05, { ...noop, bomb(b) { placed = placed || t; }, det() { det = t; } });
   assert.ok(placed > 0, 'не сховався');
   assert.ok(det > 0 || !bot.a, 'стоїть на ній вічно');
+}));
+
+test('глухі кути (pockets): кишеня, її вихід і глибина; блок, що горить, і бомба — прохід; область без циклів', () => {
+  const B = new Board(emptyMap(), 0), id = (x, y) => B.idx(x, y);
+  assert.equal(pockets(B).dead.reduce((a, v) => a + v, 0), 0);
+  B.cell[id(1, 2)] = BLOCK;                                        // (1,1), (2,1) — кишеня з виходом у (3,1)
+  let P = pockets(B);
+  assert.deepEqual([P.dead[id(1, 1)], P.dead[id(2, 1)], P.dead[id(3, 1)]], [1, 1, 0]);
+  assert.deepEqual([P.exit[id(1, 1)], P.exit[id(2, 1)]], [id(3, 1), id(3, 1)]);
+  assert.deepEqual([P.depth[id(1, 1)], P.depth[id(2, 1)]], [2, 1]);
+  assert.equal(P.dead.reduce((a, v) => a + v, 0), 2);
+  B.addBomb({ o: 0, n: 1, x: 3, y: 1, t: 0, p: 1 });
+  B.advance(10);
+  assert.deepEqual(pockets(B).dead, P.dead);                       // бомба тимчасова — не стіна
+  const Q = new Board(emptyMap(), 0);
+  Q.cell[Q.idx(1, 2)] = BLOCK;
+  Q.burn.set(Q.idx(1, 2), 100);
+  assert.equal(pockets(Q).dead[Q.idx(1, 1)], 0);
+  const C = new Board(emptyMap(), 0);                               // ізольований коридор (1..9, 1)
+  for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [10, 1]]) C.cell[C.idx(x, y)] = BLOCK;
+  P = pockets(C);
+  for (let x = 1; x <= 9; x++) { assert.equal(P.dead[C.idx(x, 1)], 1); assert.equal(P.exit[C.idx(x, 1)], -1); }
+});
+
+// «Команда», карта без блоків, крім (1,2): (1,1), (2,1) — кишеня з виходом у (3,1); бот у (3,1), монстри mons [x, y, k]
+function pocketRun(mons, d, opt, T) {
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d, t0: 0, sl: people(0, 1) });
+  const B = R.board = new Board(emptyMap(), 0), bot = R.sl[0];
+  B.cell[B.idx(1, 2)] = BLOCK;
+  R.mons = mons.map(([x, y, k], n) => ({ i: n + 1, k, x, y, d: 0, a: true }));
+  Object.assign(bot, { x: 3, y: 1, fp: 1, ...opt });
+  const bombs = [];
+  let inPocket = false, pocketBeforeBomb = false;
+  for (let t = 50; t <= T; t += 50) {
+    hostStep(R, t, 0.05, { ...noop, bomb(b) { bombs.push(b); } });
+    if (Math.round(bot.x) <= 2 && Math.round(bot.y) === 1) { inPocket = true; if (!bombs.length) pocketBeforeBomb = true; }
+  }
+  return { bombs, inPocket, pocketBeforeBomb, alive: bot.a };
+}
+
+test('«Команда»: від монстра бот тікає на відкрите місце, а не в глухий кут', () => withRandom(0.5, () => {
+  const r = pocketRun([[7, 1, 1]], 2, {}, 2000);
+  assert.ok(!r.inPocket, 'зайшов у кишеню');
+  assert.ok(r.alive);
+}));
+
+test('«Команда»: оточили на відкритому — сховок на бомбі, а не кишеня; бомб немає — тоді в кишеню', () => withRandom(0.5, () => {
+  const r = pocketRun([[5, 1, 0], [3, 3, 0]], 1, {}, 2500);
+  assert.ok(r.bombs.length && r.bombs[0].x === 3 && r.bombs[0].y === 1, 'не сховок на бомбі');
+  assert.ok(!r.pocketBeforeBomb, 'спершу в кишеню');
+  assert.ok(r.alive);
+  const q = pocketRun([[5, 1, 0], [3, 3, 0]], 1, { nb: 0 }, 2500);
+  assert.ok(q.inPocket, 'інших варіантів немає, а в кишеню не пішов');
+  assert.ok(q.alive);
+}));
+
+test('«Команда»: ціль у кишені, вихід з якої монстр може закрити, — не йде туди; монстр далеко — іде', () => withRandom(0.5, () => {
+  const r = pocketRun([[10, 1, 0]], 1, { fp: 2 }, 1500);
+  assert.ok(!r.bombs.some(b => b.x === 1 && b.y === 1), 'бомба в кишені');
+  assert.ok(!r.inPocket, 'зайшов у кишеню');
+  const q = pocketRun([[13, 11, 0]], 1, { fp: 2 }, 2000);
+  assert.ok(q.bombs.some(b => b.x === 1 && b.y === 1), 'монстр далеко, а до блоку в кишені не пішов');
 }));
