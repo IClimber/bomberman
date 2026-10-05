@@ -477,6 +477,23 @@ test('«Команда»: затиснутий у коридорі між мон
   assert.ok(bot.a);
 }));
 
+test('«Команда»: зі сховку на бомбі — вчасно у вільний бік, а не останнім виходом повз монстра', () => withRandom(0.5, () => {
+  // рядок (4..13, 1): ліворуч — розвилка (5, 2), куди йде переслідувач (з вогню — 3 кроки), праворуч вільно (4 кроки)
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 2, t0: 0, sl: people(0, 1) });
+  const B = R.board = new Board(emptyMap(), 0), bot = R.sl[0];
+  for (let x = 1; x <= 13; x += 2) if (x !== 5) B.cell[B.idx(x, 2)] = BLOCK;
+  B.cell[B.idx(3, 1)] = BLOCK;
+  R.mons = [{ i: 1, k: 1, x: 5, y: 4, d: 1, a: true }];
+  Object.assign(bot, { x: 7, y: 1, fp: 3, nb: 1 });
+  let bomb = null;
+  for (let t = 50; t <= 4000 && bot.a; t += 50) {
+    hostStep(R, t, 0.05, { ...noop, bomb(b) { bomb = bomb || b; } });
+    if (bomb && t === bomb.t + FUSE_MS) assert.ok(bot.x >= 11 && bot.y === 1, `не у вільному боці: ${bot.x}, ${bot.y}`);
+  }
+  assert.ok(bomb && bomb.x === 7 && bomb.y === 1, 'не сховався на бомбі');
+  assert.ok(bot.a);
+}));
+
 test('«Команда»: двоє ботів в одній клітинці, затиснуті монстрами, — бомба під себе (товариш ховається на ній теж)', () => withRandom(0.5, () => {
   const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 0, t0: 0, sl: people(0, 2) });
   const B = R.board = new Board(emptyMap(), 0);

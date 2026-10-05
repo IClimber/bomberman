@@ -264,8 +264,12 @@ function think(bot, ai, ctx, L) {
     if (best < 0 && ctx.reach) {
       const a = board.active.get(c);
       if (a) {                                                     // своя чи товариша, з яким стоїмо в одній клітинці
-        // своя з детонатором сама не вибухне — стоїмо на ній не довше, ніж горів би запал, далі виходимо й підриваємо
-        if (!overdue && canLeave(bot, board, c, now + 1.2 * L.think + 50, ms, danger, L)) { ai.path = []; ai.bomb = false; ai.br = 'shelterStay'; return; }
+        // своя з детонатором сама не вибухне — стоїмо на ній не довше, ніж горів би запал, далі виходимо й підриваємо.
+        // Є вихід, де монстр ніде не випереджає (як перший у riskOut), — стоїмо, лише поки він буде й пізніше: інакше бот
+        // чекав до останнього виходу будь-куди (коротшого — повз монстра біля розвилки), а вільний бік уже був задалеко,
+        // і йшов просто на монстра
+        const free = { reach: ctx.reach, cross: -ms * 0.5, hold: 0 }, tStay = now + 1.2 * L.think + 50;
+        if (!overdue && canLeave(bot, board, c, tStay, ms, danger, L, canLeave(bot, board, c, now, ms, danger, L, free) ? free : null)) { ai.path = []; ai.bomb = false; ai.br = 'shelterStay'; return; }
       } else if (danger[c] === Infinity && !danger.mine[c] && canBomb && canPlace(board, ai.tx, ai.ty) && !hitsAlly(board, c, bot.fp, ctx, true)
         && ctx.reach[c] > now + ms * 0.5 && ctx.reach[c] < now + 3000
         && canEscape(bot, board, c, now, ms, danger, { reach: null }, L.spare, L.wallSoon)) {
@@ -612,12 +616,14 @@ export function pockets(board) {
   return { dead, exit, depth };
 }
 
-// Чи можна вийти з клітинки c, вирушивши в момент t, туди, де не вибухне (без огляду на монстрів)
-function canLeave(bot, board, c, t, ms, danger, L) {
-  const r = bfs(bot, board, c, t, ms, danger, null, null, Math.min(L.spare, LAST_SPARE - ms / 2));
+// Чи можна вийти з клітинки c, вирушивши в момент t, туди, де не вибухне (mon — ще й так, щоб монстр не випередив на шляху
+// й не дійшов туди за mon.hold; без mon — без огляду на монстрів)
+function canLeave(bot, board, c, t, ms, danger, L, mon = null) {
+  const r = bfs(bot, board, c, t, ms, danger, null, mon, Math.min(L.spare, LAST_SPARE - ms / 2));
   for (let i = 0; i < r.dist.length; i++) {
     const ti = t + r.dist[i] * ms;
-    if (r.dist[i] > 0 && danger[i] === Infinity && !danger.mine[i] && !board.fireAt(i) && board.wallAt[i] > ti + L.wallSoon) return true;
+    if (r.dist[i] > 0 && danger[i] === Infinity && !danger.mine[i] && !board.fireAt(i) && board.wallAt[i] > ti + L.wallSoon
+      && (!mon || monOk(mon, i, ti))) return true;
   }
   return false;
 }
