@@ -6,6 +6,44 @@ import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bo
 
 const CY = '#2bf3ff', MG = '#ff2bd6', RED = '#ff2b4a';
 
+// Тло — нічне місто: сяйво над обрієм, хмарочоси (з країв — вищі) з вікнами й вивісками
+function backdrop(g, W, H, dpr) {
+  const hz = H * 0.72;
+  const sky = g.createLinearGradient(0, 0, 0, hz);
+  sky.addColorStop(0, '#07040f'); sky.addColorStop(0.7, '#1c0a2e'); sky.addColorStop(1, '#4a0f4a');
+  g.fillStyle = sky; g.fillRect(0, 0, W, hz);
+  const u = H / 900;
+  for (const [far, col, seed] of [[1, '#160c2a', 1], [0, '#0a0614', 2]]) {
+    for (let x = -10 * u, j = 0; x < W; j++) {
+      const w = (40 + rnd(j, seed) * 70) * u * (far ? 0.8 : 1);
+      const side = Math.min(x, W - x - w) / W;                             // з країв — вищі
+      const h = H * (far ? 0.26 : 0.1) + rnd(j, seed + 10) * H * (side < 0.18 ? 0.4 : 0.14) * (far ? 0.8 : 1);
+      const top = hz + (far ? 0 : H * 0.06) - h;
+      g.fillStyle = col; g.fillRect(x, top, w, H - top);
+      g.fillStyle = rgba(rnd(j, seed + 20) < 0.5 ? CY : MG, far ? 0.25 : 0.55);
+      g.fillRect(x, top, w, Math.max(1, dpr));
+      if (!far) {
+        for (let wy = top + 8 * u, f = 0; wy < H - 6 * u; wy += 10 * u, f++) {   // вікна: світяться поверхами
+          if (rnd(j * 131 + f, seed + 60) < 0.55) continue;
+          for (let wx = x + 5 * u, c = 0; wx < x + w - 6 * u; wx += 8 * u, c++) {
+            const r = rnd(j * 977 + f * 31 + c, seed);
+            if (r > 0.45) continue;
+            g.fillStyle = r < 0.08 ? rgba(MG, 0.75) : r < 0.2 ? rgba(CY, 0.6) : 'rgba(255,214,120,0.45)';
+            g.fillRect(wx, wy, 4 * u, 5 * u);
+          }
+        }
+        if (rnd(j, seed + 30) < 0.4 && w > 50 * u) {                       // вертикальна вивіска
+          const c = rnd(j, seed + 40) < 0.5 ? CY : MG, sx = x + w * 0.5 - 6 * u, sy = top + 14 * u;
+          g.fillStyle = '#05030a'; g.fillRect(sx, sy, 12 * u, 60 * u);
+          g.strokeStyle = c; g.lineWidth = 2 * u; g.strokeRect(sx, sy, 12 * u, 60 * u);
+          for (let k = 0; k < 4; k++) { g.fillStyle = rgba(c, 0.8); g.fillRect(sx + 3 * u, sy + (6 + k * 13) * u, 6 * u, 8 * u); }
+        }
+      }
+      x += w + (far ? 0 : rnd(j, seed + 50) * 14 * u);
+    }
+  }
+}
+
 function floor(g, px, py, s, x, y, map) {
   g.fillStyle = (x + y) % 2 ? '#141029' : '#110d24';
   g.fillRect(px, py, s, s);
@@ -265,6 +303,7 @@ function monster(g, m, s, T, wob) {
 export default {
   name: 'Кіберпанк',
   bg: '#07040f',
+  backdrop,
   shadow: 'rgba(255,43,214,0.35)',
   emoji: { bomb: '💣', fire: '🔥', speed: '⚡', pass: '👾', resist: '🛡', remote: '📡' },
   fire: [MG, '#35e8ff', '#f2feff'],

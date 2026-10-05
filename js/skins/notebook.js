@@ -41,7 +41,65 @@ function sketchCircle(g, cx, cy, r, lw, color, seed) {
 }
 const phase = (T, i = 0) => Math.floor(T / BOIL) * 7 + i * 13;
 
-// Тло — дерев'яний стіл
+// Шкільне приладдя на столі — у координатах від центру предмета, лежить уздовж x; L — довжина
+const shadowOf = (g, L, h) => { g.fillStyle = 'rgba(25,12,4,0.35)'; rr(g, -L / 2 + h * 0.15, -h / 2 + h * 0.35, L, h, h * 0.4); g.fill(); };
+function pencil(g, L, body = '#f2c230') {
+  const h = L * 0.075;
+  shadowOf(g, L, h);
+  g.fillStyle = body; g.fillRect(-L / 2 + h * 1.2, -h / 2, L * 0.78, h);
+  g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(-L / 2 + h * 1.2, h * 0.12, L * 0.78, h * 0.38);
+  g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(-L / 2 + h * 1.2, -h * 0.4, L * 0.78, h * 0.15);
+  g.fillStyle = '#b7b9bf'; g.fillRect(-L / 2 + h * 0.4, -h / 2, h * 0.85, h);                     // обойма
+  g.fillStyle = '#ef8fa0'; rr(g, -L / 2, -h / 2, h * 0.6, h, h * 0.2); g.fill();                    // гумка
+  const tx = -L / 2 + h * 1.2 + L * 0.78;
+  poly(g, [[tx, -h / 2], [L / 2, 0], [tx, h / 2]], '#e8c99a');                                        // заточка
+  poly(g, [[L / 2 - h * 0.7, -h * 0.18], [L / 2, 0], [L / 2 - h * 0.7, h * 0.18]], DARK);
+}
+function pen(g, L) {
+  const h = L * 0.07;
+  shadowOf(g, L, h);
+  g.fillStyle = '#e9eef6'; rr(g, -L / 2, -h / 2, L * 0.86, h, h * 0.45); g.fill();
+  g.fillStyle = 'rgba(42,79,168,0.25)'; g.fillRect(-L / 2 + h, -h * 0.15, L * 0.6, h * 0.3);           // стрижень
+  g.fillStyle = INK; rr(g, -L / 2, -h * 0.55, L * 0.22, h * 1.1, h * 0.45); g.fill();                  // ковпачок
+  g.fillRect(-L / 2 + L * 0.08, -h * 0.8, L * 0.16, h * 0.22);                                        // кліпса
+  poly(g, [[L * 0.36, -h * 0.42], [L / 2, 0], [L * 0.36, h * 0.42]], '#cfd6e2');
+  circle(g, L / 2 - h * 0.1, 0, h * 0.12, INK);
+}
+function ruler(g, L) {
+  const h = L * 0.13;
+  shadowOf(g, L, h);
+  g.fillStyle = 'rgba(190,230,255,0.75)'; g.fillRect(-L / 2, -h / 2, L, h);
+  g.strokeStyle = 'rgba(40,70,110,0.7)'; g.lineWidth = Math.max(1, L * 0.004);
+  g.beginPath();
+  for (let k = 0; k <= 30; k++) { const x = -L / 2 + L * 0.03 + k * L * 0.0313; g.moveTo(x, -h / 2); g.lineTo(x, -h / 2 + h * (k % 5 ? 0.22 : 0.42)); }
+  g.stroke();
+  g.strokeRect(-L / 2, -h / 2, L, h);
+}
+function eraser(g, L) {
+  const h = L * 0.5;
+  shadowOf(g, L, h);
+  g.fillStyle = '#f7f3ea'; rr(g, -L / 2, -h / 2, L, h, h * 0.15); g.fill();
+  g.fillStyle = '#4f7fd1'; rr(g, L * 0.05, -h / 2, L * 0.45, h, h * 0.15); g.fill(); g.fillRect(L * 0.05, -h / 2, L * 0.2, h);
+  g.fillStyle = '#e25c68'; g.fillRect(-L * 0.05, -h / 2, L * 0.1, h);
+}
+function sharpener(g, L) {
+  const h = L * 0.7;
+  shadowOf(g, L, h);
+  g.fillStyle = '#d84a4a'; rr(g, -L / 2, -h / 2, L, h, h * 0.12); g.fill();
+  g.fillStyle = '#a9adb6'; g.fillRect(-L * 0.1, -h / 2, L * 0.35, h);
+  circle(g, -L * 0.25, 0, h * 0.2, '#5a1f1f');
+}
+function clip(g, L) {
+  g.strokeStyle = '#c9ced8'; g.lineWidth = Math.max(1, L * 0.05); g.lineCap = 'round';
+  const h = L * 0.3;
+  g.beginPath();
+  g.moveTo(L * 0.3, h * 0.25); g.lineTo(-L * 0.35, h * 0.25); g.arc(-L * 0.35, 0, h * 0.25, Math.PI / 2, -Math.PI / 2);
+  g.lineTo(L * 0.4, -h * 0.25); g.arc(L * 0.4, 0, h * 0.25, -Math.PI / 2, Math.PI / 2);
+  g.moveTo(L * 0.4, h * 0.25); g.lineTo(-L * 0.2, h * 0.25);
+  g.stroke();
+}
+
+// Тло — дерев'яний стіл і шкільне приладдя
 function backdrop(g, W, H, dpr) {
   const step = 9 * dpr;
   for (let y = 0, r = 0; y < H; y += step, r++) {
@@ -50,6 +108,13 @@ function backdrop(g, W, H, dpr) {
     g.beginPath(); g.moveTo(0, y);
     for (let x = 0; x <= W; x += 40 * dpr) g.lineTo(x, y + Math.sin(x / (90 * dpr) + r * 0.7) * 3 * dpr);
     g.stroke();
+  }
+  const u = H / 900;
+  for (const [fn, fx, fy, L, rot] of [
+    [pencil, 0.07, 0.2, 230, 1.35], [pen, 0.1, 0.55, 200, -1.75], [eraser, 0.06, 0.78, 60, 0.4], [clip, 0.03, 0.42, 50, 0.9],
+    [ruler, 0.94, 0.5, 330, 1.62], [(g, L) => pencil(g, L, '#4caf6a'), 0.905, 0.14, 190, 2.2], [sharpener, 0.9, 0.86, 46, -0.3], [clip, 0.97, 0.9, 44, -0.6],
+  ]) {
+    g.save(); g.translate(W * fx, H * fy); g.rotate(rot); fn(g, L * u); g.restore();
   }
 }
 

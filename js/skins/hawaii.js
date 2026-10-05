@@ -6,6 +6,35 @@ import { TAU, rr, rnd, luma, shade, circle, ellipse, line, poly, bombBeat, bombF
 
 const SAND = '#f0d49a', SKIN = '#d9965f', LEAF = '#2f9e44', LEAF_D = '#1f7a34', WOOD = '#7a4a24';
 
+// Пальма: основа (x, y), висота h, нахил lean (частка h)
+function palm(g, x, y, h, lean) {
+  const tx = x + lean * h, ty = y - h;
+  g.strokeStyle = WOOD; g.lineWidth = h * 0.09; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + lean * h * 0.1, y - h * 0.6, tx, ty); g.stroke();
+  g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = h * 0.02;
+  for (let k = 1; k < 6; k++) {
+    const t = k / 6, bx = (1 - t) ** 2 * x + 2 * (1 - t) * t * (x + lean * h * 0.1) + t * t * tx, by = (1 - t) ** 2 * y + 2 * (1 - t) * t * (y - h * 0.6) + t * t * ty;
+    g.beginPath(); g.moveTo(bx - h * 0.04, by); g.lineTo(bx + h * 0.04, by); g.stroke();
+  }
+  for (let k = 0; k < 6; k++) {                                            // листя
+    const a = -Math.PI / 2 + (k - 2.5) * 0.62, L = h * (0.55 + (k % 2) * 0.12);
+    const ex = tx + Math.cos(a) * L, ey = ty + Math.sin(a) * L * 0.6 + L * 0.35;
+    const mx = tx + Math.cos(a) * L * 0.5, my = ty + Math.sin(a) * L * 0.5 - L * 0.12;
+    g.fillStyle = k % 2 ? LEAF : LEAF_D;
+    g.beginPath(); g.moveTo(tx, ty);
+    g.quadraticCurveTo(mx - Math.sin(a) * L * 0.18, my - L * 0.08, ex, ey);
+    g.quadraticCurveTo(mx + Math.sin(a) * L * 0.1, my + L * 0.12, tx, ty); g.fill();
+  }
+  for (const [dx, dy] of [[-0.05, 0.05], [0.04, 0.06], [0, 0.1]]) circle(g, tx + dx * h, ty + dy * h, h * 0.045, '#5a3a1a');
+}
+// Острівець: мілина, пісок, пальми
+function isle(g, x, y, r, palms) {
+  ellipse(g, x, y, r * 1.35, r * 0.62, 'rgba(120,220,220,0.35)');
+  ellipse(g, x, y, r * 1.12, r * 0.48, 'rgba(160,235,230,0.45)');
+  ellipse(g, x, y + r * 0.05, r, r * 0.4, '#d9b878');
+  ellipse(g, x, y - r * 0.03, r * 0.94, r * 0.34, SAND);
+  for (const [dx, h, lean] of palms) palm(g, x + dx * r, y, r * h, lean);
+}
 function backdrop(g, W, H, dpr) {
   g.strokeStyle = 'rgba(255,255,255,0.07)'; g.lineWidth = 2 * dpr;
   const step = 34 * dpr;
@@ -14,6 +43,11 @@ function backdrop(g, W, H, dpr) {
     for (let x = (r % 2) * step / 2 - step; x < W + step; x += step) { g.moveTo(x, y); g.quadraticCurveTo(x + step / 4, y - step / 5, x + step / 2, y); }
     g.stroke();
   }
+  const u = H / 900;
+  isle(g, W * 0.08, H * 0.3, 70 * u, [[-0.2, 1.7, 0.25], [0.35, 1.25, 0.4]]);
+  isle(g, W * 0.94, H * 0.72, 80 * u, [[0.15, 1.8, -0.3], [-0.4, 1.2, -0.15], [0.5, 1, 0.3]]);
+  isle(g, W * 0.06, H * 0.86, 40 * u, [[0, 1.9, 0.3]]);
+  isle(g, W * 0.93, H * 0.2, 34 * u, [[0, 1.8, -0.35]]);
 }
 
 function floor(g, px, py, s, x, y, map) {

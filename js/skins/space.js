@@ -6,6 +6,26 @@ import { TAU, rr, bevel, rgba, rnd, luma, shade, circle, ellipse, line, poly, bo
 
 const GLOW = '#4fc3ff';
 
+// Невеличка спіральна галактика: ядро, рукави з зір, нахил (стиснення по y)
+function galaxy(g, x, y, r, tilt, rot, hue, dpr, seed) {
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(1, tilt);
+  const core = g.createRadialGradient(0, 0, 0, 0, 0, r);
+  core.addColorStop(0, `hsla(${hue},80%,92%,0.9)`); core.addColorStop(0.15, `hsla(${hue},70%,70%,0.45)`);
+  core.addColorStop(0.6, `hsla(${hue},70%,55%,0.12)`); core.addColorStop(1, `hsla(${hue},70%,50%,0)`);
+  g.fillStyle = core; g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+  const rng = mulberry32(seed);
+  for (let arm = 0; arm < 2; arm++) {
+    for (let k = 0; k < 140; k++) {
+      const t = rng(), a = arm * Math.PI + t * 4.2, d = r * (0.12 + t * 0.88);
+      const jx = (rng() - 0.5) * r * 0.22 * (0.4 + t), jy = (rng() - 0.5) * r * 0.22 * (0.4 + t);
+      g.fillStyle = rng() < 0.2 ? `hsla(${hue + 40},90%,80%,${0.5 + rng() * 0.5})` : `rgba(235,240,255,${0.25 + rng() * 0.6 * (1 - t)})`;
+      const sz = (rng() < 0.85 ? 0.9 : 1.6) * dpr;
+      g.fillRect(Math.cos(a) * d + jx, Math.sin(a) * d + jy, sz, sz);
+    }
+  }
+  g.restore();
+}
+
 function backdrop(g, W, H, dpr) {
   const rng = mulberry32(12345);
   const neb = g.createRadialGradient(W * 0.8, H * 0.2, 0, W * 0.8, H * 0.2, Math.max(W, H) * 0.6);
@@ -17,6 +37,14 @@ function backdrop(g, W, H, dpr) {
     g.fillStyle = c < 0.1 ? '#ffd9a0' : c < 0.2 ? '#a8d4ff' : `rgba(255,255,255,${0.4 + rng() * 0.6})`;
     g.fillRect(rng() * W, rng() * H, r, r);
   }
+  const u = H / 900;
+  for (const [fx, fy, r, tilt, rot, hue] of [[0.07, 0.22, 60, 0.45, 0.5, 220], [0.94, 0.68, 70, 0.6, -0.4, 290], [0.06, 0.84, 34, 0.35, -0.9, 30], [0.9, 0.16, 28, 0.8, 1.2, 190], [0.96, 0.42, 24, 0.5, 0.3, 0]]) {
+    galaxy(g, W * fx, H * fy, r * u, tilt, rot, hue, dpr, Math.round(fx * 1000 + fy * 100));
+  }
+  const ex = W * 0.05, ey = H * 0.5, er = 22 * u;                          // еліптична — розмита пляма
+  const el = g.createRadialGradient(ex, ey, 0, ex, ey, er);
+  el.addColorStop(0, 'rgba(255,225,190,0.55)'); el.addColorStop(1, 'rgba(255,225,190,0)');
+  g.save(); g.translate(ex, ey); g.scale(1.6, 1); g.translate(-ex, -ey); g.fillStyle = el; g.beginPath(); g.arc(ex, ey, er, 0, TAU); g.fill(); g.restore();
 }
 
 function floor(g, px, py, s, x, y, map) {

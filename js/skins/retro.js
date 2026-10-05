@@ -1,7 +1,7 @@
 // retro.js — «Ретро 8-біт»: усе — піксель-арт 16×16, як на NES: зелене поле, бетонні стовпи, червона цегла,
 // бомбермен кольору гравця, кулька, синій злюка, привид. Спрайти кешуються під розмір клітинки.
 import { IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
-import { makeCanvas, pix, shade, ellipse, bombBeat, bombFlash } from './common.js';
+import { makeCanvas, pix, rnd, shade, ellipse, bombBeat, bombFlash } from './common.js';
 
 const N = 16;
 const FLOOR = '#2f8a32', FLOOR_SH = '#1d6420';
@@ -16,6 +16,46 @@ function spr(key, s, draw) {
   return c;
 }
 const gen = (fn) => Array.from({ length: N }, (_, r) => Array.from({ length: N }, (_, c) => fn(c, r)).join(''));
+
+// Тло — піксельна ніч, як на NES: зорі, хмари, пагорби й кущі, труба, цегляна земля
+function backdrop(g, W, H, dpr) {
+  const u = Math.max(2, Math.round(H / 200));                      // «піксель» тла
+  const px = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x / u) * u, Math.round(y / u) * u, w * u, h * u); };
+  for (let j = 0; j < 140; j++) px(rnd(j, 1) * W, rnd(j, 2) * H * 0.75, 1, 1, rnd(j, 3) < 0.25 ? '#3cbcfc' : rnd(j, 3) < 0.4 ? '#fcd800' : '#a4a4a4');
+  const ground = Math.floor(H / u) * u - 8 * u;
+  const hill = (cx, r, h) => {                                     // ступінчастий пагорб з очима
+    for (let j = 0; j <= h; j++) {
+      const w = Math.round(r * Math.sqrt(Math.max(0, 1 - (j / (h + 1)) ** 2)));
+      px(cx * W - (w + 1) * u, ground - j * u, 2 * w + 2, 1, '#005800');
+      if (j < h) px(cx * W - w * u, ground - j * u, 2 * w, 1, '#00a800');
+    }
+    px(cx * W - 3 * u, ground - h * 0.6 * u, 1, 3, '#005800'); px(cx * W + 2 * u, ground - h * 0.6 * u, 1, 3, '#005800');
+  };
+  const puff = (x, y, n, fill, edge) => {                          // хмара чи кущ — кілька горбиків
+    for (let k = 0; k < n; k++) {
+      const cx = x + k * 7 * u;
+      for (let j = 0; j < 5; j++) {
+        const w = [4, 4, 4, 3, 2][j];
+        px(cx - (w + 1) * u, y - j * u, 2 * w + 2, 1, edge);
+        px(cx - w * u, y - j * u, 2 * w, 1, fill);
+      }
+    }
+    px(x - 5 * u, y, (n - 1) * 7 + 10, 2, fill);
+  };
+  hill(0.06, 22, 18); hill(0.16, 13, 10); hill(0.95, 26, 22);
+  puff(0.02 * W, ground, 3, '#58d854', '#00a800'); puff(0.9 * W, ground, 2, '#58d854', '#00a800');
+  puff(0.04 * W, H * 0.18, 3, '#fcfcfc', '#3cbcfc'); puff(0.88 * W, H * 0.12, 2, '#fcfcfc', '#3cbcfc'); puff(0.9 * W, H * 0.4, 1, '#fcfcfc', '#3cbcfc');
+  const tx = Math.round(0.86 * W / u) * u;                        // труба
+  px(tx - 6 * u, ground - 14 * u, 14, 14, '#00a800'); px(tx - 7 * u, ground - 18 * u, 16, 5, '#00a800');
+  px(tx - 4 * u, ground - 14 * u, 2, 14, '#b8f818'); px(tx - 5 * u, ground - 18 * u, 2, 5, '#b8f818');
+  px(tx + 5 * u, ground - 14 * u, 2, 14, '#005800'); px(tx + 6 * u, ground - 18 * u, 2, 5, '#005800');
+  const cols = Math.ceil(W / u) + 1;
+  for (let r = 0; r < 2; r++) {                                    // цегла
+    const y = ground + u + r * 4 * u;
+    px(0, y, cols, 4, '#c84c0c'); px(0, y, cols, 1, '#fc9838'); px(0, y + 3 * u, cols, 1, '#3c1000');
+    for (let x = (r % 2) * 4 * u; x < W; x += 8 * u) px(x, y, 1, 4, '#3c1000');
+  }
+}
 
 function floor(g, px, py, s, x, y, map) {
   g.fillStyle = FLOOR;
@@ -323,6 +363,7 @@ function monster(g, m, s, T) {
 export default {
   name: 'Ретро 8-біт',
   bg: '#000000',
+  backdrop,
   emoji: { bomb: '💣', fire: '🔥', speed: '🛼', pass: '👻', resist: '🛡', remote: '🕹️' },
   fire: ['#f83800', '#fca044', '#fcfcfc'],
   burn: ['#f83800', 'rgba(252,160,68,0)'],

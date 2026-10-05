@@ -1,6 +1,6 @@
 // classic.js — стиль «За замовчуванням»: зелене поле, сірі стовпи, цегла, бомбермени в шоломах.
 import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
-import { TAU, rr, bevel, shade, flameShape, bombShape, spark, bombBeat, bombFlash, pillarShade, remoteIcon } from './common.js';
+import { TAU, rr, rnd, circle, bevel, shade, flameShape, bombShape, spark, bombBeat, bombFlash, pillarShade, remoteIcon } from './common.js';
 
 const C = {
   floorA: '#3d8a47', floorB: '#398342', floorShadow: 'rgba(0,0,0,0.22)',
@@ -10,6 +10,23 @@ const C = {
   wall: '#454b5a', wallHi: '#6b7387', wallLo: '#2b2f39', rivet: '#9aa3b6',
   skin: '#ffd2a8', glove: '#ff8fb1', visor: '#1d2030',
 };
+
+// Тло — шпалери з бомб і вогників
+function backdrop(g, W, H, dpr) {
+  const step = 70 * dpr;
+  for (let r = 0, y = step / 2; y < H + step; r++, y += step * 0.8) {
+    for (let c = 0, x = (r % 2) * step / 2; x < W + step; c++, x += step) {
+      const i = r * 97 + c;
+      g.save(); g.translate(x, y); g.rotate((rnd(i, 1) - 0.5) * 0.7);
+      if ((r + c * 2) % 5 === 0) flameShape(g, 0, 0, 12 * dpr, 'rgba(255,140,50,0.07)');
+      else {
+        bombShape(g, 0, 0, 12 * dpr, 'rgba(120,135,170,0.11)', 'rgba(120,135,170,0.05)', 'rgba(201,163,107,0.16)');
+        if (rnd(i, 2) < 0.3) circle(g, 14.5 * dpr, -12.5 * dpr, 2.5 * dpr, 'rgba(255,210,63,0.22)');
+      }
+      g.restore();
+    }
+  }
+}
 
 function floor(g, px, py, s, x, y, map) {
   g.fillStyle = (x + y) % 2 ? C.floorA : C.floorB;
@@ -211,6 +228,7 @@ export function eyes(g, m, s, eyeY, white = '#fff', pupil = '#16131f', gap = 0.1
 export default {
   name: 'За замовчуванням',
   bg: '#141722',
+  backdrop,
   emoji: { bomb: '💣', fire: '🔥', speed: '👟', pass: '👻', resist: '🛡', remote: '📡' },
   fire: ['#ff6a1a', '#ffc533', '#fff6c8'],
   burn: ['#ff6a00', 'rgba(255,220,80,0)'],

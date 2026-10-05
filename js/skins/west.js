@@ -18,9 +18,9 @@ function backdrop(g, W, H, dpr) {
   g.beginPath(); g.moveTo(0, H * 0.78);
   for (const [x, y] of [[0.08, 0.78], [0.1, 0.6], [0.24, 0.6], [0.27, 0.78], [0.55, 0.78], [0.58, 0.66], [0.66, 0.66], [0.68, 0.78], [0.85, 0.78], [0.87, 0.56], [0.97, 0.56], [1, 0.7]]) g.lineTo(W * x, H * y);
   g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
-  for (const fx of [0.4, 0.8]) {
-    const x = W * fx, y = H * 0.78, u = 6 * dpr;
-    g.fillStyle = '#2a120e';
+  for (const [fx, fy, k] of [[0.825, 0.78, 6], [0.93, 0.97, 11]]) {   // кактуси — з боків, щоб у грі їх було видно
+    const x = W * fx, y = H * fy, u = k * H / 900;
+    g.fillStyle = fy > 0.8 ? '#190806' : '#2a120e';
     rr(g, x - u, y - u * 9, u * 2, u * 9, u); g.fill();
     rr(g, x - u * 4, y - u * 6, u * 1.6, u * 3.5, u * 0.8); g.fill(); g.fillRect(x - u * 4, y - u * 3.3, u * 4, u * 1.4);
     rr(g, x + u * 2.4, y - u * 7.5, u * 1.6, u * 3.5, u * 0.8); g.fill(); g.fillRect(x, y - u * 4.6, u * 4, u * 1.4);

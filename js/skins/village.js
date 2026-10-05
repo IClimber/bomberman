@@ -24,6 +24,26 @@ function backdrop(g, W, H, dpr) {
       }
     }
   }
+  // Обабіч — стрічки-рушники з «ружею» (восьмипелюсткова зірка хрестиком)
+  const bw = 15 * u;
+  for (const x0 of [W * 0.035, W * 0.965 - bw]) {
+    g.fillStyle = '#f3ead6'; g.fillRect(x0 - u, 0, bw + 2 * u, H);
+    for (let y = 0; y < H; y += u * 2) {
+      g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x0, y, u * 0.8, u * 0.8); g.fillRect(x0 + bw - u, y, u * 0.8, u * 0.8);
+    }
+    for (let yc = 9 * u, k = 0; yc < H; yc += 17 * u, k++) {
+      for (let j = -6; j <= 6; j++) {
+        for (let i = -6; i <= 6; i++) {
+          const a = Math.abs(i), b = Math.abs(j);
+          const star = (a === 0 && b <= 6) || (b === 0 && a <= 6) || (a === b && a <= 4) || (a + b === 4 && a && b) || (a + b === 6 && Math.abs(a - b) === 2);
+          if (!star) continue;
+          const core = a + b <= 1;
+          g.fillStyle = core ? 'rgba(0,0,0,0.65)' : k % 2 ? 'rgba(198,40,40,0.75)' : 'rgba(0,0,0,0.6)';
+          g.fillRect(x0 + bw / 2 - u / 2 + i * u, yc + j * u, u * 0.8, u * 0.8);
+        }
+      }
+    }
+  }
 }
 
 function floor(g, px, py, s, x, y, map) {

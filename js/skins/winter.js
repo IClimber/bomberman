@@ -7,6 +7,50 @@ import { itemTile } from './classic.js';
 
 const SNOW = '#f2f6fb', COAL = '#1d2230', CARROT = '#ff8a2b';
 
+// Тло — зимова ніч: місяць, сяйво, засніжені пагорби, ялинки з боків, сніжинки
+function fir(g, x, y, h) {
+  g.fillStyle = '#4a3020'; g.fillRect(x - h * 0.04, y - h * 0.12, h * 0.08, h * 0.12);
+  for (let k = 0; k < 3; k++) {
+    const t = y - h * 0.1 - k * h * 0.27, w = h * (0.34 - k * 0.08);
+    poly(g, [[x - w, t], [x, t - h * 0.38], [x + w, t]], '#173d33');
+    poly(g, [[x - w * 0.55, t - h * 0.17], [x, t - h * 0.38], [x + w * 0.55, t - h * 0.17], [x, t - h * 0.12]], SNOW);
+    ellipse(g, x, t, w, h * 0.035, 'rgba(242,246,251,0.9)');
+  }
+}
+function backdrop(g, W, H, dpr) {
+  const u = H / 900;
+  const sky = g.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#060b18'); sky.addColorStop(1, '#1b2a4a');
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  for (let k = 0; k < 3; k++) {                                           // північне сяйво
+    g.strokeStyle = `rgba(80,255,170,${0.06 - k * 0.015})`; g.lineWidth = (60 - k * 15) * u;
+    g.beginPath(); g.moveTo(-50 * u, H * (0.18 + k * 0.03));
+    g.bezierCurveTo(W * 0.3, H * 0.02, W * 0.6, H * 0.32, W + 50 * u, H * (0.1 + k * 0.03)); g.stroke();
+  }
+  const mx = W * 0.07, my = H * 0.12, mr = 34 * u;
+  const glow = g.createRadialGradient(mx, my, mr, mx, my, mr * 4);
+  glow.addColorStop(0, 'rgba(220,235,255,0.2)'); glow.addColorStop(1, 'rgba(220,235,255,0)');
+  g.fillStyle = glow; g.fillRect(0, 0, W, H);
+  circle(g, mx, my, mr, '#eef4ff');
+  circle(g, mx + mr * 0.3, my - mr * 0.2, mr * 0.2, 'rgba(170,190,220,0.4)');
+  circle(g, mx - mr * 0.35, my + mr * 0.3, mr * 0.13, 'rgba(170,190,220,0.4)');
+  for (const [cx, w, h, c] of [[0.1, 0.35, 0.22, '#b8cbe6'], [0.88, 0.4, 0.26, '#b8cbe6'], [0.5, 0.6, 0.14, '#cfdcf0'], [-0.05, 0.3, 0.12, '#dbe6f5'], [1.02, 0.32, 0.14, '#dbe6f5']]) {
+    ellipse(g, W * cx, H, W * w / 2, H * h, c);
+  }
+  for (const [fx, fy, h] of [[0.03, 0.93, 150], [0.09, 0.97, 110], [0.15, 0.95, 80], [0.86, 0.96, 120], [0.93, 0.94, 160], [0.985, 0.98, 100]]) fir(g, W * fx, H * fy, h * u);
+  for (let j = 0; j < 260; j++) circle(g, rnd(j, 1) * W, rnd(j, 2) * H, (0.8 + rnd(j, 3) * 2.2) * u, `rgba(255,255,255,${0.35 + rnd(j, 4) * 0.5})`);
+  g.strokeStyle = 'rgba(220,235,255,0.35)'; g.lineWidth = 1.5 * u; g.lineCap = 'round';
+  for (const [fx, fy, r] of [[0.05, 0.4, 14], [0.13, 0.62, 10], [0.92, 0.3, 16], [0.96, 0.6, 11], [0.17, 0.25, 9], [0.84, 0.5, 9]]) {
+    const x = W * fx, y = H * fy, s = r * u;
+    for (let k = 0; k < 6; k++) {
+      const a = k * TAU / 6, ex = x + Math.cos(a) * s, ey = y + Math.sin(a) * s;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(ex, ey);
+      for (const sg of [-1, 1]) { g.moveTo(x + Math.cos(a) * s * 0.6, y + Math.sin(a) * s * 0.6); g.lineTo(x + Math.cos(a) * s * 0.6 + Math.cos(a + sg * 0.8) * s * 0.3, y + Math.sin(a) * s * 0.6 + Math.sin(a + sg * 0.8) * s * 0.3); }
+      g.stroke();
+    }
+  }
+}
+
 function floor(g, px, py, s, x, y, map) {
   g.fillStyle = (x + y) % 2 ? '#6584ad' : '#6281aa';
   g.fillRect(px, py, s, s);
@@ -258,6 +302,7 @@ function monster(g, m, s, T, wob) {
 export default {
   name: 'Зима',
   bg: '#0c1424',
+  backdrop,
   emoji: { bomb: '🧨', fire: '🎆', speed: '⛸️', pass: '🛷', resist: '🧣', remote: '🔔' },
   fire: ['#ff4a3d', '#ffb347', '#fffbe6'],
   burn: ['#ff5a2a', 'rgba(255,200,80,0)'],

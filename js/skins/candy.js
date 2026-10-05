@@ -11,12 +11,54 @@ const COOKIE = '#c98a4a', ICING = '#fffaf2';
 const SPRINKLES = ['#ff4d8d', '#4dc3ff', '#ffd23f', '#7be36a', '#b07aff', '#ff8a3d'];
 
 // Тло — рожевий фон з посипкою
+// Великі цукерки на тлі: льодяник на паличці, цукерка в обгортці, м'ятна «шайба»
+function lollipop(g, x, y, r) {
+  g.fillStyle = 'rgba(120,40,80,0.18)'; g.beginPath(); g.arc(x + r * 0.1, y + r * 0.12, r, 0, TAU); g.fill();
+  line(g, x, y + r * 0.8, x + r * 0.15, y + r * 2.6, r * 0.16, '#fffaf2');
+  circle(g, x, y, r, '#ff7fb0');
+  g.lineWidth = r * 0.2; g.lineCap = 'round';
+  for (const [c, off] of [['#fffaf2', 0], ['#ffd23f', Math.PI * 2 / 3], ['#4dc3ff', Math.PI * 4 / 3]]) {
+    g.strokeStyle = c; g.beginPath();
+    for (let t = 0; t < 1; t += 0.02) { const a = off + t * 9, d = r * 0.88 * t; g[t ? 'lineTo' : 'moveTo'](x + Math.cos(a) * d, y + Math.sin(a) * d); }
+    g.stroke();
+  }
+  ellipse(g, x - r * 0.35, y - r * 0.4, r * 0.25, r * 0.12, 'rgba(255,255,255,0.55)', -0.7);
+}
+function wrapped(g, x, y, r, rot, col) {
+  g.save(); g.translate(x, y); g.rotate(rot);
+  for (const sx of [-1, 1]) {                                              // хвостики обгортки
+    poly(g, [[sx * r * 0.8, 0], [sx * r * 1.75, -r * 0.6], [sx * r * 1.6, -r * 0.15], [sx * r * 1.8, r * 0.2], [sx * r * 1.65, r * 0.6]], shade(col, -0.1));
+    line(g, sx * r * 0.95, -r * 0.1, sx * r * 1.5, -r * 0.35, r * 0.06, 'rgba(255,255,255,0.45)');
+  }
+  ellipse(g, 0, 0, r, r * 0.72, col);
+  g.save(); g.beginPath(); g.ellipse(0, 0, r, r * 0.72, 0, 0, TAU); g.clip();
+  g.fillStyle = 'rgba(255,255,255,0.85)';
+  for (let k = -3; k <= 3; k++) { g.beginPath(); g.moveTo(k * r * 0.45 - r * 0.12, -r); g.lineTo(k * r * 0.45 + r * 0.12, -r); g.lineTo(k * r * 0.45 + r * 0.5, r); g.lineTo(k * r * 0.45 + r * 0.26, r); g.fill(); }
+  g.restore();
+  ellipse(g, -r * 0.3, -r * 0.35, r * 0.35, r * 0.12, 'rgba(255,255,255,0.6)', -0.2);
+  g.restore();
+}
+function mint(g, x, y, r) {
+  circle(g, x + r * 0.08, y + r * 0.1, r, 'rgba(120,40,80,0.18)');
+  circle(g, x, y, r, '#fffaf2');
+  for (let k = 0; k < 8; k++) {
+    g.fillStyle = '#e53950'; g.beginPath(); g.moveTo(x, y);
+    g.arc(x, y, r * 0.92, k * TAU / 8, k * TAU / 8 + TAU / 16); g.closePath(); g.fill();
+  }
+  circle(g, x, y, r * 0.2, '#fffaf2');
+  g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = r * 0.06; g.beginPath(); g.arc(x, y, r * 0.98, 0, TAU); g.stroke();
+}
+
 function backdrop(g, W, H, dpr) {
   for (let j = 0; j < 400; j++) {
     g.save(); g.translate(rnd(j, 1) * W, rnd(j, 2) * H); g.rotate(rnd(j, 3) * TAU);
     g.fillStyle = SPRINKLES[j % SPRINKLES.length]; rr(g, -4 * dpr, -1.3 * dpr, 8 * dpr, 2.6 * dpr, 1.3 * dpr); g.fill();
     g.restore();
   }
+  const u = H / 900;
+  lollipop(g, W * 0.075, H * 0.24, 62 * u);
+  wrapped(g, W * 0.945, H * 0.62, 48 * u, -0.5, '#7be36a');
+  mint(g, W * 0.07, H * 0.8, 46 * u);
 }
 
 function floor(g, px, py, s, x, y, map) {

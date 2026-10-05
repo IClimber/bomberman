@@ -11,6 +11,34 @@ const SAND = '#d9c896', SAND2 = '#d3c18e', ROCK = '#4f5f66', ROCK_HI = '#6b7c84'
 const BRASS = '#c8913a', BRASS_HI = '#f0c060', WOOD = '#7a5030', SEA = '#0e4f6e';
 
 // Тло — глибина: промені світла згори, бульбашки
+// Риба: (x, y) — центр, r — довжина/2, dir — куди пливе (±1)
+function fish(g, x, y, r, dir, body, fin) {
+  g.save(); g.translate(x, y); g.scale(dir, 1);
+  poly(g, [[-r * 0.75, 0], [-r * 1.25, -r * 0.45], [-r * 1.15, 0], [-r * 1.25, r * 0.45]], fin);
+  poly(g, [[-r * 0.1, -r * 0.4], [r * 0.25, -r * 0.75], [r * 0.35, -r * 0.35]], fin);
+  ellipse(g, 0, 0, r, r * 0.48, body);
+  g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = r * 0.08;
+  g.beginPath(); g.arc(r * 0.35, 0, r * 0.4, -1.2, 1.2); g.stroke();
+  circle(g, r * 0.58, -r * 0.1, r * 0.12, '#fff'); circle(g, r * 0.62, -r * 0.1, r * 0.06, '#10202a');
+  g.restore();
+}
+// Жовтий підводний човен: (x, y) — центр, r — довжина/2, пливе праворуч
+function sub(g, x, y, r) {
+  ellipse(g, x, y, r, r * 0.38, '#f2c230');
+  ellipse(g, x, y + r * 0.12, r * 0.95, r * 0.22, 'rgba(160,100,0,0.25)');
+  rr(g, x - r * 0.3, y - r * 0.62, r * 0.5, r * 0.32, r * 0.08); g.fillStyle = '#f2c230'; g.fill();
+  line(g, x + r * 0.05, y - r * 0.62, x + r * 0.05, y - r * 0.85, r * 0.05, '#8a8f99');
+  line(g, x + r * 0.05, y - r * 0.85, x + r * 0.2, y - r * 0.85, r * 0.05, '#8a8f99');
+  for (const dx of [-0.35, 0, 0.35]) { circle(g, x + dx * r, y - r * 0.02, r * 0.12, '#8a5a12'); circle(g, x + dx * r, y - r * 0.02, r * 0.085, '#bfefff'); }
+  poly(g, [[x - r * 0.9, y], [x - r * 1.2, y - r * 0.3], [x - r * 1.2, y + r * 0.3]], '#d9a21b');
+  ellipse(g, x - r * 1.22, y, r * 0.05, r * 0.2, '#8a8f99');
+  ellipse(g, x + r * 0.45, y - r * 0.2, r * 0.25, r * 0.06, 'rgba(255,255,255,0.45)', -0.15);
+  const lx = x + r * 0.95, ly = y;                                           // промінь прожектора
+  const beam = g.createLinearGradient(lx, ly, lx + r * 2, ly);
+  beam.addColorStop(0, 'rgba(255,250,200,0.35)'); beam.addColorStop(1, 'rgba(255,250,200,0)');
+  g.fillStyle = beam; g.beginPath(); g.moveTo(lx, ly); g.lineTo(lx + r * 2, ly - r * 0.5); g.lineTo(lx + r * 2, ly + r * 0.5); g.closePath(); g.fill();
+}
+
 function backdrop(g, W, H, dpr) {
   const grd = g.createLinearGradient(0, 0, 0, H);
   grd.addColorStop(0, '#13628a'); grd.addColorStop(1, '#041c2c');
@@ -26,6 +54,12 @@ function backdrop(g, W, H, dpr) {
     g.lineWidth = Math.max(1, dpr);
     g.beginPath(); g.arc(rnd(j, 1) * W, rnd(j, 2) * H, r, 0, TAU); g.stroke();
   }
+  const u = H / 900;
+  sub(g, W * 0.06, H * 0.3, 70 * u);
+  for (const [fx, fy, r, d, b, f] of [
+    [0.92, 0.18, 26, -1, '#ff8a3d', '#e0602a'], [0.955, 0.24, 18, -1, '#ff8a3d', '#e0602a'], [0.9, 0.26, 16, -1, '#ff8a3d', '#e0602a'],
+    [0.05, 0.62, 22, 1, '#4dc3ff', '#2a8fd6'], [0.1, 0.67, 16, 1, '#4dc3ff', '#2a8fd6'], [0.94, 0.58, 34, -1, '#ffd23f', '#e0a020'], [0.08, 0.86, 28, -1, '#b07aff', '#7a4ad6'],
+  ]) fish(g, W * fx, H * fy, r * u, d, b, f);
 }
 
 function floor(g, px, py, s, x, y, map) {

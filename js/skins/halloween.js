@@ -6,6 +6,58 @@ import { TAU, rr, bevel, rnd, luma, shade, circle, ellipse, line, poly, bombShap
 
 const BONE = '#e9e3d3', ORANGE = '#ff8a1f';
 
+// Павутина в куті (cx, cy): sx, sy — у який бік (±1), r — розмір
+function web(g, cx, cy, sx, sy, r, w) {
+  g.strokeStyle = 'rgba(220,215,235,0.45)'; g.lineWidth = w; g.lineCap = 'round';
+  const N = 6, ang = (k) => (k / (N - 1)) * Math.PI / 2;
+  const pt = (k, d) => [cx + sx * Math.cos(ang(k)) * d, cy + sy * Math.sin(ang(k)) * d];
+  g.beginPath();
+  for (let k = 0; k < N; k++) { g.moveTo(cx, cy); g.lineTo(...pt(k, r)); }
+  for (let ring = 1; ring <= 5; ring++) {
+    const d = r * ring / 5.4;
+    g.moveTo(...pt(0, d));
+    for (let k = 1; k < N; k++) {
+      const [x1, y1] = pt(k - 1, d), [x2, y2] = pt(k, d), [mx, my] = pt(k - 0.5, d * 0.86);
+      g.quadraticCurveTo(mx, my, x2, y2);
+    }
+  }
+  g.stroke();
+}
+// Павук на нитці
+function spider(g, x, y0, y, r, w) {
+  line(g, x, y0, x, y, w, 'rgba(220,215,235,0.45)');
+  g.strokeStyle = '#3b2a4f'; g.lineWidth = w * 2;
+  for (const sx of [-1, 1]) for (let k = 0; k < 4; k++) {
+    const a = -0.6 + k * 0.4;
+    g.beginPath(); g.moveTo(x, y + r * 0.3); g.lineTo(x + sx * r * 1.3, y + r * (a - 0.2)); g.lineTo(x + sx * r * 1.9, y + r * (a + 0.9)); g.stroke();
+  }
+  circle(g, x, y + r * 0.4, r, '#3b2a4f'); circle(g, x, y - r * 0.5, r * 0.6, '#3b2a4f');
+  circle(g, x - r * 0.22, y - r * 0.55, r * 0.15, '#9dff4a'); circle(g, x + r * 0.22, y - r * 0.55, r * 0.15, '#9dff4a');
+}
+// Череп під кутом
+function skullAt(g, x, y, r, rot) {
+  g.save(); g.translate(x, y); g.rotate(rot); skull(g, 0, 0, r, BONE, '#1a0f22'); g.restore();
+}
+function bone(g, x1, y1, x2, y2, w) {
+  line(g, x1, y1, x2, y2, w, BONE);
+  const a = Math.atan2(y2 - y1, x2 - x1), n = w * 0.55;
+  for (const [x, y] of [[x1, y1], [x2, y2]]) for (const s of [-1, 1]) circle(g, x + Math.cos(a + s * Math.PI / 2) * n, y + Math.sin(a + s * Math.PI / 2) * n, w * 0.6, BONE);
+}
+// Скелет сидить, спершись спиною ліворуч; (x, y) — де таз
+function skeleton(g, x, y, u) {
+  bone(g, x, y, x + 3 * u, y - 46 * u, 7 * u);                             // хребет
+  for (let k = 0; k < 4; k++) {                                            // ребра
+    const ry = y - (40 - k * 8) * u, w = (17 - k * 2) * u;
+    g.strokeStyle = BONE; g.lineWidth = 3.5 * u;
+    g.beginPath(); g.ellipse(x + 3 * u, ry, w, 4 * u, 0, 0.15, Math.PI - 0.15); g.stroke();
+  }
+  ellipse(g, x, y, 16 * u, 7 * u, BONE);                                   // таз
+  bone(g, x + 8 * u, y, x + 40 * u, y - 18 * u, 6 * u); bone(g, x + 40 * u, y - 18 * u, x + 62 * u, y + 4 * u, 5 * u);   // ноги
+  bone(g, x - 6 * u, y + 2 * u, x + 30 * u, y + 2 * u, 6 * u); bone(g, x + 30 * u, y + 2 * u, x + 56 * u, y + 12 * u, 5 * u);
+  bone(g, x + 14 * u, y - 42 * u, x + 26 * u, y - 18 * u, 5 * u); bone(g, x + 26 * u, y - 18 * u, x + 44 * u, y - 22 * u, 4.5 * u);   // рука на коліні
+  skullAt(g, x + 8 * u, y - 62 * u, 15 * u, 0.25);
+}
+
 function backdrop(g, W, H, dpr) {
   const x = W * 0.88, y = H * 0.12, r = Math.min(W, H) * 0.09;
   const glow = g.createRadialGradient(x, y, r * 0.8, x, y, r * 3);
@@ -19,6 +71,14 @@ function backdrop(g, W, H, dpr) {
     g.fillStyle = `rgba(255,255,255,${0.2 + rng() * 0.4})`;
     g.fillRect(rng() * W, rng() * H * 0.6, dpr, dpr);
   }
+  const u = H / 900;
+  web(g, 0, 0, 1, 1, 190 * u, 1.3 * u);
+  web(g, W, H, -1, -1, 150 * u, 1.3 * u);
+  spider(g, W * 0.085, 0, H * 0.32, 13 * u, 1.3 * u);
+  ellipse(g, W * 0.09, H * 0.99, 150 * u, 30 * u, '#1d1426');
+  skeleton(g, W * 0.04, H * 0.95, u * 1.5);
+  bone(g, W * 0.89, H * 0.97, W * 0.93, H * 0.935, 8 * u);
+  skullAt(g, W * 0.955, H * 0.935, 20 * u, -0.3);
 }
 
 function floor(g, px, py, s, x, y, map) {
