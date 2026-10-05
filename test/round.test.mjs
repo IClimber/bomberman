@@ -22,7 +22,7 @@ test('слоти стартують у кутах з базовими бонус
   assert.deepEqual(R.sl.map(s => [s.x, s.y]), [[1, 1], [13, 11], [13, 1], [1, 11]]);
   for (const s of R.sl) { assert.equal(s.nb, 1); assert.equal(s.fp, 2); assert.ok(s.a); }
   assert.equal(R.mons.length, 0);
-  assert.equal(newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1) }).mons.length, 5);
+  assert.equal(newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1) }).mons.length, 6);
 });
 
 test('розум ботів: у «Один проти одного» — від складності, у «Команді» — завжди найкращий', () => {
@@ -187,7 +187,7 @@ test('монстр і бомба: на «Легко» йде під вибух, 
   assert.equal(survived(2), true);
 });
 
-test('монстри «Важко»: переслідувач «чує» гравця за рогом, блукач повертає до гравця поруч, біля бомби — чекають поза вогнем', () => {
+test('монстри «Нормально» й «Важко»: переслідувач «чує» гравця за рогом, блукач повертає до гравця поруч, біля бомби — чекають поза вогнем', () => {
   const step = (m, diff, players, b = new Board(emptyMap(), 0), now = 0) => withRandom(0, () => {
     b.advance(now);
     monsterStep(m, 0.01, b, players, { now, t0: 0, diff, danger: () => b.danger() });
@@ -195,10 +195,12 @@ test('монстри «Важко»: переслідувач «чує» гра�
   });
   const chaser = () => ({ i: 1, k: 1, x: 5, y: 5, d: 2, a: true });
   assert.equal(step(chaser(), 2, [{ x: 3, y: 3 }]), 1);   // не на одній лінії: найкоротшим шляхом (угору)
-  assert.equal(step(chaser(), 1, [{ x: 3, y: 3 }]), 2);   // «Нормально» — іде, куди йшов
+  assert.equal(step(chaser(), 1, [{ x: 3, y: 3 }]), 1);   // «Нормально» — теж
+  assert.equal(step(chaser(), 0, [{ x: 3, y: 3 }]), 2);   // «Легко» — іде, куди йшов
   const walker = () => ({ i: 1, k: 0, x: 5, y: 1, d: 2, a: true });
   assert.equal(step(walker(), 2, [{ x: 3, y: 1 }]), 4);
-  assert.equal(step(walker(), 1, [{ x: 3, y: 1 }]), 2);
+  assert.equal(step(walker(), 1, [{ x: 3, y: 1 }]), 4);
+  assert.equal(step(walker(), 0, [{ x: 3, y: 1 }]), 2);
   const near = (diff) => {                                // бомба в (5, 1): вогонь (4..6, 1); монстр у (7, 1), гравець — у (1, 1)
     const b = new Board(emptyMap(), 0);
     b.addBomb({ o: 0, n: 1, x: 5, y: 1, t: 0, p: 1 });
@@ -208,7 +210,8 @@ test('монстри «Важко»: переслідувач «чує» гра�
     return [m.x, m.y];
   };
   assert.deepEqual(near(2), [7, 1]);                     // стоїть найближче до гравця, поза вогнем
-  assert.notDeepEqual(near(1), [7, 1]);                  // «Нормально» — геть від вибуху
+  assert.deepEqual(near(1), [7, 1]);                     // «Нормально» — теж
+  assert.notDeepEqual(near(0), [7, 1]);                  // «Легко» — бомби не зважає
 });
 
 test('привид не полює перші 20 с раунду і далі, ніж за кілька клітинок', () => {
@@ -458,7 +461,7 @@ test('«Команда»: помилки рівня не діють — бот �
 });
 
 test('«Команда»: затиснутий у коридорі між монстрами — бомба під себе, стоїть на ній, поки монстр поруч, і виходить до вибуху', () => withRandom(0.5, () => {
-  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(0, 1) });   // монстри «Нормально»: тікають далеко
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 0, t0: 0, sl: people(0, 1) });   // монстри «Легко»: не чекають біля бомби
   const B = R.board = new Board(emptyMap(), 0), bot = R.sl[0];
   for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [10, 1]]) B.cell[B.idx(x, y)] = BLOCK;   // коридор (1..9, 1)
   R.mons = [{ i: 1, k: 0, x: 1, y: 1, d: 0, a: true }, { i: 2, k: 0, x: 9, y: 1, d: 0, a: true }];
@@ -475,7 +478,7 @@ test('«Команда»: затиснутий у коридорі між мон
 }));
 
 test('«Команда»: двоє ботів в одній клітинці, затиснуті монстрами, — бомба під себе (товариш ховається на ній теж)', () => withRandom(0.5, () => {
-  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(0, 2) });
+  const R = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 0, t0: 0, sl: people(0, 2) });
   const B = R.board = new Board(emptyMap(), 0);
   for (const [x, y] of [[1, 2], [3, 2], [5, 2], [7, 2], [9, 2], [10, 1]]) B.cell[B.idx(x, y)] = BLOCK;
   R.mons = [{ i: 1, k: 0, x: 1, y: 1, d: 0, a: true }, { i: 2, k: 0, x: 9, y: 1, d: 0, a: true }];

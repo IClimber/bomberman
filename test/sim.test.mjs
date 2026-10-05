@@ -48,7 +48,7 @@ test('карта «Команди»: монстри далеко від стар
     }
   }
   assert.ok(makeMap(5, 0, true, 2).mons.length > makeMap(5, 0, true, 0).mons.length);
-  assert.equal(makeMap(5, 0, true, 1).mons.length, 5);
+  assert.equal(makeMap(5, 0, true, 1).mons.length, 6);
 });
 
 test('вибух: хрест на дальність, стовп зупиняє, блок горить і зупиняє, бонус з\'являється після догоряння', () => {

@@ -14,9 +14,9 @@ export const SPEED_STEP = 0.5;       // за кожен бонус швидко�
 export const MAX_SPEED_UPS = 4, MAX_BOMBS = 8, MAX_FIRE = 8;
 export const SD_BASE_MS = 180000;    // раптова смерть на 13×11; росте як √площі
 export const SD_STEP_BASE_MS = 250;  // крок спіралі на 13×11; на більших картах — частіше
-export const MONSTER_PER = 25;       // на «Нормально» — один монстр на стільки вільних клітинок
-export const DIFF_K = [0.6, 1, 1.5]; // множник кількості монстрів: легко, нормально, важко
-export const MON_PLUS = [0, 0, 1];   // і ще стільки монстрів (на малій карті «Важко» інакше легше, ніж на великій)
+export const MONSTER_PER = 25;       // один монстр на стільки вільних клітинок (× DIFF_K)
+export const DIFF_K = [0.6, 1.15, 1.5]; // множник кількості монстрів: легко, нормально, важко
+export const MON_PLUS = [0, 0.5, 1]; // і ще стільки монстрів, до округлення (на малій карті інакше легше, ніж на великій)
 
 // Клітинки
 export const EMPTY = 0, PILLAR = 1, BLOCK = 2, WALL = 3;
@@ -29,7 +29,7 @@ export const MON = [
   { speed: 2.3, sight: 6 },
   { speed: 1.3, ghost: true },
 ];
-const MON_MIX = [[0.6, 0.3, 0.1], [0.45, 0.35, 0.2], [0.2, 0.5, 0.3]];
+export const MON_MIX = [[0.6, 0.3, 0.1], [0.2, 0.6, 0.2], [0.2, 0.5, 0.3]];
 const MON_SAFE = 5, GHOST_SAFE = 8;  // монстри (привиди) з'являються не ближче (по сітці) до місць старту
 
 // Напрями: 0 — стоїть, 1 вгору, 2 вправо, 3 вниз, 4 вліво
@@ -96,7 +96,7 @@ export function makeMap(seed, sizeIdx, coop = false, diff = 1) {
   // Монстри — до бонусів: звичайним монстрам блок на місці появи прибираємо
   const mons = [];
   if (coop) {
-    const count = Math.max(1, Math.round(free / MONSTER_PER * (DIFF_K[diff] ?? 1))) + (MON_PLUS[diff] ?? 0);
+    const count = Math.max(1, Math.round(free / MONSTER_PER * (DIFF_K[diff] ?? 1) + (MON_PLUS[diff] ?? 0)));
     const far = [];
     for (let y = 1; y <= h; y++) {
       for (let x = 1; x <= w; x++) {
