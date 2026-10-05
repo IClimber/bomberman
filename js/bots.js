@@ -82,7 +82,7 @@ const BACK = [0, 3, 4, 1, 2];
 // Повертає true, якщо бот хоче поставити бомбу тут і зараз (хост перевірить і поставить).
 export function botTick(bot, dt, ctx) {
   const L = level(bot, ctx);
-  const ai = bot.ai || (bot.ai = { next: 0, seen: -1, path: [], bomb: false, tx: null, ty: null, goal: -1, roam: false, allyWait: 0, tabu: new Map() });
+  const ai = bot.ai || (bot.ai = { next: 0, seen: -1, path: [], bomb: false, tx: null, ty: null, goal: -1, roam: false, allyWait: 0, tabu: new Map(), br: '' });
   if (ai.tx == null) { ai.tx = Math.round(bot.x); ai.ty = Math.round(bot.y); }
   const board = ctx.board, GW = board.map.GW;
   const seen = sees(bot, ctx, L), bombs = seen.bombs;
@@ -160,6 +160,7 @@ function sees(bot, ctx, L) {
 // Небезпека так, як її бачить бот (для тестів)
 export const botDanger = (bot, ctx) => (sees(bot, ctx, level(bot, ctx)).danger || ctx.danger)();
 
+// ai.br — мітка гілки, якою закінчилось рішення (для прогонів і тестів)
 function think(bot, ai, ctx, L) {
   const { board, now } = ctx, GW = board.map.GW;
   const c = ai.ty * GW + ai.tx;
@@ -177,7 +178,7 @@ function think(bot, ai, ctx, L) {
   ai.roam = false;
   // «Команда»: стоїмо на бомбі стійкими до вогню, а монстр поруч, — так і стоїмо: вогонь уб'є його, а не нас
   if (ctx.reach && board.active.has(c) && shielded(bot, danger.last[c]) && ctx.monsters.some(m => Math.abs(m.x - ai.tx) + Math.abs(m.y - ai.ty) <= bot.fp + 1)) {
-    ai.path = []; ai.bomb = false;
+    ai.path = []; ai.bomb = false; ai.br = 'shieldStay';
     return;
   }
   if (!here || cramped) {
@@ -191,12 +192,12 @@ function think(bot, ai, ctx, L) {
         const j = (y + DY[d]) * GW + x + DX[d];
         if (!board.solid(x + DX[d], y + DY[d], false, bot.ps) && !board.fireAt(j) && own[j] === Infinity && !own.mine[j]) opts.push(j);
       }
-      if (opts.length) { ai.path = [opts[Math.floor(Math.random() * opts.length)]]; ai.bomb = false; ai.next = 0; return; }
+      if (opts.length) { ai.path = [opts[Math.floor(Math.random() * opts.length)]]; ai.bomb = false; ai.next = 0; ai.br = 'misstep'; return; }
     }
     // монстр близько, а бомба є — ставимо заслін (крізь бомбу монстр не пройде) і тікаємо від неї
     if (ctx.reach && danger[c] === Infinity && !danger.mine[c] && canBomb && canPlace(board, ai.tx, ai.ty) && !hitsAlly(board, c, bot.fp, ctx, true)
       && canEscape(bot, board, c, now, ms, danger, mon, L.spare, L.wallSoon)) {
-      ai.path = []; ai.bomb = true;
+      ai.path = []; ai.bomb = true; ai.br = 'barrier';
       return;
     }
     let spare = L.spare, r = bfs(bot, board, c, now, ms, danger, null, mon, spare);
@@ -219,10 +220,12 @@ function think(bot, ai, ctx, L) {
     }
     safe.sort((a, b) => r.dist[a] - r.dist[b]);
     let best = safe.slice(0, 10).find(i => roomy(i, now + r.dist[i] * ms)) ?? -1;  // найближча, де не затиснуть
+    let how = 'Near';                                              // для мітки гілки ai.br
     const under = board.active.get(c), overdue = !!under && under.b.o === bot.o && under.te === Infinity && now >= under.b.t + FUSE_MS;
     // монстри поблизу — не найближча, а та, де простору найбільше (кишеня, хай і ближча, — пастка), і подалі від них
     if (ctx.reach && ctx.reach[c] < now + MON_NEAR) {
       let bestK = -Infinity;
+      how = 'Open';
       for (const i of safe.slice(0, 30)) {
         const t = now + r.dist[i] * ms, k = openness(bot, board, i, t, ms, danger, mon, L.spare, ctx.reach) - r.dist[i] * 60;
         if (k > bestK) { bestK = k; best = i; }
@@ -235,16 +238,17 @@ function think(bot, ai, ctx, L) {
       const a = board.active.get(c);
       if (a) {                                                     // своя чи товариша, з яким стоїмо в одній клітинці
         // своя з детонатором сама не вибухне — стоїмо на ній не довше, ніж горів би запал, далі виходимо й підриваємо
-        if (!overdue && canLeave(bot, board, c, now + 1.2 * L.think + 50, ms, danger, L)) { ai.path = []; ai.bomb = false; return; }
+        if (!overdue && canLeave(bot, board, c, now + 1.2 * L.think + 50, ms, danger, L)) { ai.path = []; ai.bomb = false; ai.br = 'shelterStay'; return; }
       } else if (danger[c] === Infinity && !danger.mine[c] && canBomb && canPlace(board, ai.tx, ai.ty) && !hitsAlly(board, c, bot.fp, ctx, true)
         && ctx.reach[c] > now + ms * 0.5 && ctx.reach[c] < now + 3000
         && canEscape(bot, board, c, now, ms, danger, { reach: null }, L.spare, L.wallSoon)) {
-        ai.path = []; ai.bomb = true;
+        ai.path = []; ai.bomb = true; ai.br = 'shelter';
         return;
       }
     }
     if (best >= 0 || !cramped) {                                   // тісно, а просторіше ніде — далі як звичайно
       if (best < 0 && safe.length) best = safe[0];
+      ai.br = (here ? 'fleeMon' : 'fleeFire') + (best < 0 ? 'Late' : how);
       // від вогню не втекти, не ризикнувши з монстром, — ризикуємо (зі своєї бомби з детонатором після запалу — так само:
       // вона сама не вибухне, і бот стояв би на ній вічно, а монстри — стерегли)
       if (best < 0 && ctx.reach && (danger[c] !== Infinity || overdue)) {
@@ -263,7 +267,7 @@ function think(bot, ai, ctx, L) {
               : Math.min(ctx.reach[i] - t, 5000) - r2.dist[i] * 50;
             if (k > pickK) { pickK = k; pick = i; }
           }
-          if (pick >= 0) { ai.path = pathTo(r2, pick); ai.bomb = false; return; }
+          if (pick >= 0) { ai.path = pathTo(r2, pick); ai.bomb = false; ai.br = 'riskOut'; return; }
         }
       }
       ai.path = pathTo(r, best >= 0 ? best : late);
@@ -283,6 +287,7 @@ function think(bot, ai, ctx, L) {
   if (esc && blastValue(board, c, bot.fp, ctx, foe) + (chance(L.pressure) ? pressure(ctx, c, GW) : 0) > 0) {
     ai.path = []; ai.goal = -1; ai.allyWait = 0;
     if (Math.random() < L.aggro) ai.bomb = true;                   // не наважився — вагається тут
+    ai.br = 'bombHere';
     return;
   }
   // «Команда»: бот-товариш чекає, поки ми зійдемо з лінії його вогню, — відходимо (чекаємо й ми на нього — відходить той,
@@ -295,11 +300,11 @@ function think(bot, ai, ctx, L) {
     for (let i = 0; i < r.dist.length; i++) {
       if (r.dist[i] > 0 && !fire.has(i) && standOk(i, now + r.dist[i] * ms) && (best < 0 || r.dist[i] < r.dist[best])) best = i;
     }
-    if (best >= 0) { ai.path = pathTo(r, best); ai.goal = -1; ai.allyWait = 0; return; }
+    if (best >= 0) { ai.path = pathTo(r, best); ai.goal = -1; ai.allyWait = 0; ai.br = 'allyMove'; return; }
   }
   if (esc && ctx.coop && blastValue(board, c, bot.fp, { ...ctx, allies: [] }, foe) > 0) {
     if (!ai.allyWait) ai.allyWait = now + ALLY_WAIT;
-    if (now < ai.allyWait) { ai.path = []; return; }               // свій на лінії вогню — чекаємо, поки відійде
+    if (now < ai.allyWait) { ai.path = []; ai.br = 'allyWait'; return; }               // свій на лінії вогню — чекаємо, поки відійде
   }
   if (ai.goal === c) ai.tabu.set(c, now + TABU_MS);
   for (const [i, until] of ai.tabu) if (until <= now) ai.tabu.delete(i);
@@ -324,10 +329,10 @@ function think(bot, ai, ctx, L) {
       if (!canEscape(bot, board, k.i, now + k.d * ms, ms, escDanger(), mon, L.spare, L.wallSoon)) continue;
     } else if (k.v <= 0 && k.bv <= 0) continue;
     ai.path = pathTo(r, k.i);
-    ai.goal = k.i; ai.allyWait = 0;
+    ai.goal = k.i; ai.allyWait = 0; ai.br = 'target';
     return;
   }
-  ai.goal = -1; ai.allyWait = 0;
+  ai.goal = -1; ai.allyWait = 0; ai.br = 'roam';
   // Поруч нічого цікавого — туди, звідки найближче до блоків і суперників (у «Команді» — монстрів); без roamFoes — лише
   // до блоків, а їх немає — навмання поблизу
   const goals = !L.roamFoes ? [] : ctx.enemies.map(e => [Math.round(e.x), Math.round(e.y)]);
@@ -344,7 +349,7 @@ function think(bot, ai, ctx, L) {
   if (ctx.reach && ctx.reach[c] < now + MON_ROAM) {
     // монстр наближається, а цілі немає — на відкрите місце, подалі від монстрів (а не до блоків, тобто в кишені)
     let bestK = openness(bot, board, c, now, ms, danger, mon, L.spare, ctx.reach);
-    best = null;
+    best = null; ai.br = 'roamOpen';
     for (const k of cand.slice().sort((a, b) => a.d - b.d).slice(0, 30)) {
       const v = openness(bot, board, k.i, now + k.d * ms, ms, danger, mon, L.spare, ctx.reach) - k.d * 60;
       if (v > bestK) { bestK = v; best = k; }
