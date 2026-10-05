@@ -5,7 +5,7 @@ import { createNet } from 'https://iclimber.github.io/p2p-net/v1/net.js';
 import { S, ID_RE, COLORS, EMOJI, cleanName, uq8 } from './state.js';
 import { SIZES, FUSE_MS, bombKey, pickKey, detKey, hashStr } from './sim.js';
 import { SKINS } from './skins/index.js';
-import { newRound, kill, MODE_VS, KB_NONE } from './round.js';
+import { newRound, kill, MODE_VS, KB_NONE, RES_GOING } from './round.js';
 import * as host from './host.js';
 
 export const SIGNAL_URL = 'wss://144-172-110-72.sslip.io/ws';
@@ -101,7 +101,7 @@ function parseLobby(d) {
   return d;
 }
 function parseWorld(d) {
-  if (d.r <= 0 || d.p > 1 || d.m > 1 || d.s >= SIZES.length || d.d > 2 || d.k > 5) return null;
+  if (d.r <= 0 || d.p > 1 || d.m > 1 || d.s >= SIZES.length || d.d > 2 || d.k > RES_GOING) return null;
   if (!d.sl.length || d.sl.length > 4 || d.mo.length > 256 || d.bo.length > 512) return null;
   for (const s of d.sl) {
     if ((s.i && !ID_RE.test(s.i)) || (!s.i && !s.b) || s.c >= COLORS.length || s.dr > 4) return null;
