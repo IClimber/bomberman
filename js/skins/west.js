@@ -111,13 +111,10 @@ function wall(g, s) {
   for (const fy of [0.32, 0.72]) { g.fillStyle = '#5a3a1f'; g.fillRect(0, s * fy, s, s * 0.07); }
 }
 
-// Бонуси на плакаті «Розшукується» (пергамент, цвях)
+// Бонуси — без рамки, лише тінь на землі
 function item(g, k, s) {
-  const p = s * 0.1, cx = s / 2, cy = s / 2 + s * 0.03;
-  g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(p + s * 0.03, p + s * 0.05, s - 2 * p, s - 2 * p);
-  g.fillStyle = '#efd9a8'; g.fillRect(p, p, s - 2 * p, s - 2 * p);
-  g.strokeStyle = '#b58a4a'; g.lineWidth = Math.max(1, s * 0.03); g.strokeRect(p + s * 0.03, p + s * 0.03, s - 2 * p - s * 0.06, s - 2 * p - s * 0.06);
-  circle(g, cx, p + s * 0.05, s * 0.03, '#6b6b70');
+  const cx = s / 2, cy = s / 2 + s * 0.03;
+  ellipse(g, cx, s * 0.84, s * 0.26, s * 0.07, 'rgba(100,50,20,0.35)');
   if (k === IT_BOMB) dynamite(g, cx, cy + s * 0.02, s * 0.7, false);
   else if (k === IT_FIRE) { flameShape(g, cx, cy, s * 0.24, '#e8401c'); flameShape(g, cx, cy + s * 0.06, s * 0.14, '#ffc23d'); }
   else if (k === IT_SPEED) {                                         // шпора
