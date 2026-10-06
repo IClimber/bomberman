@@ -1,7 +1,7 @@
 // state.js — спільний стан клієнта (лоббі, раунд, імена, позиції інших) і дрібні утиліти.
 
 // Версія — кількість комітів у main разом із тим, що її змінює; видно в лоббі (чи оновились GitHub Pages)
-export const VERSION = 60;
+export const VERSION = 61;
 
 // Палітра гравців (8 — щоб у лоббі кольори не повторювались); боти беруть вільні
 export const COLORS = ['#f4f4f4', '#3b3b46', '#e53935', '#1e88e5', '#fdd835', '#ec407a', '#26c6da', '#fb8c00'];
@@ -15,7 +15,7 @@ export const uq8 = (v) => v / 256;
 
 const NAMES = ['Андрій', 'Тарас', 'Богдан', 'Остап', 'Микола', 'Сашко', 'Діма', 'Юрко', 'Вітя', 'Женя', 'Олег', 'Макс', 'Назар', 'Ігор'];
 let saved = '';
-try { saved = cleanName((localStorage.getItem('crossbomb-name') ?? localStorage.getItem('bomberman-name')) || ''); } catch {}
+try { saved = cleanName(localStorage.getItem('crossbomb-name') || ''); } catch {}
 
 // Кімната — хеш URL; немає — генеруємо
 let roomId = location.hash.slice(1);

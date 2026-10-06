@@ -218,8 +218,8 @@ export const DRUMS = Object.keys(DRUM);
 // ================= Програвач =================
 let off = null;
 try {
-  const v = localStorage.getItem('crossbomb-music') ?? localStorage.getItem('bomberman-music');
-  off = v === null ? (localStorage.getItem('crossbomb-mute') ?? localStorage.getItem('bomberman-mute')) === '1' : v === '0';
+  const v = localStorage.getItem('crossbomb-music');
+  off = v === null ? localStorage.getItem('crossbomb-mute') === '1' : v === '0';
 } catch { off = false; }
 export const isMusicOff = () => off;
 export function setMusicOff(v) {

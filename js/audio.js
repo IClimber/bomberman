@@ -1,8 +1,7 @@
 // audio.js — звуки, згенеровані Web Audio (без файлів). Вимкнення запам'ятовується в localStorage; музика — окремо (music.js).
 let ac = null, master = null, noiseBuf = null;
 let muted = false;
-// bomberman-* — ключі до перейменування гри (читаються, якщо нових ще немає)
-try { muted = (localStorage.getItem('crossbomb-mute') ?? localStorage.getItem('bomberman-mute')) === '1'; } catch {}
+try { muted = localStorage.getItem('crossbomb-mute') === '1'; } catch {}
 
 export const isMuted = () => muted;
 export const audioCtx = () => ac;                                  // для музики (music.js), з'являється після unlock
