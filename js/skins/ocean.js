@@ -155,16 +155,20 @@ function wall(g, s) {
 }
 
 // Бонуси в бульбашці
+const ITEM_BG = { [IT_BOMB]: '#ff8a7a', [IT_FIRE]: '#ff7a5a', [IT_SPEED]: '#7ae0ff', [IT_PASS]: '#9ad8ff', [IT_RESIST]: '#8ef0a8', [IT_REMOTE]: '#d0b8ff' };
 function item(g, k, s) {
   const cx = s / 2, cy = s / 2;
-  ellipse(g, cx, s * 0.84, s * 0.26, s * 0.07, 'rgba(60,50,20,0.3)');       // без бульбашки — лише тінь на піску
+  circle(g, cx, cy, s * 0.4, rgba(ITEM_BG[k], 0.55));
+  g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = Math.max(1, s * 0.03);
+  g.beginPath(); g.arc(cx, cy, s * 0.4, 0, TAU); g.stroke();
+  g.beginPath(); g.arc(cx, cy, s * 0.32, Math.PI * 1.1, Math.PI * 1.45); g.stroke();
   if (k === IT_BOMB) mine(g, cx, cy + s * 0.02, s * 0.15, false, 0);
   else if (k === IT_FIRE) {                                          // тризуб
-    g.strokeStyle = BRASS; g.lineWidth = s * 0.045; g.lineCap = 'round';
+    g.strokeStyle = BRASS_HI; g.lineWidth = s * 0.045; g.lineCap = 'round';
     g.beginPath(); g.moveTo(cx, cy + s * 0.28); g.lineTo(cx, cy - s * 0.24);
     g.moveTo(cx - s * 0.15, cy - s * 0.2); g.quadraticCurveTo(cx - s * 0.15, cy - s * 0.02, cx, cy - s * 0.02); g.quadraticCurveTo(cx + s * 0.15, cy - s * 0.02, cx + s * 0.15, cy - s * 0.2);
     g.stroke();
-    for (const fx of [-0.15, 0, 0.15]) poly(g, [[cx + s * fx - s * 0.04, cy - s * (fx ? 0.18 : 0.22)], [cx + s * fx, cy - s * (fx ? 0.28 : 0.32)], [cx + s * fx + s * 0.04, cy - s * (fx ? 0.18 : 0.22)]], BRASS);
+    for (const fx of [-0.15, 0, 0.15]) poly(g, [[cx + s * fx - s * 0.04, cy - s * (fx ? 0.18 : 0.22)], [cx + s * fx, cy - s * (fx ? 0.28 : 0.32)], [cx + s * fx + s * 0.04, cy - s * (fx ? 0.18 : 0.22)]], BRASS_HI);
   } else if (k === IT_SPEED) {                                       // дельфін
     g.fillStyle = '#5a8ab0';
     g.beginPath(); g.moveTo(cx - s * 0.26, cy + s * 0.08); g.quadraticCurveTo(cx - s * 0.06, cy - s * 0.22, cx + s * 0.2, cy - s * 0.06);
@@ -173,14 +177,11 @@ function item(g, k, s) {
     poly(g, [[cx - s * 0.22, cy + s * 0.12], [cx - s * 0.3, cy + s * 0.02], [cx - s * 0.32, cy + s * 0.22]], '#5a8ab0');
     circle(g, cx + s * 0.13, cy - s * 0.07, s * 0.015, '#111');
   } else if (k === IT_PASS) {                                        // хвиля
-    g.lineCap = 'round';
-    for (const [w, c] of [[0.13, '#fff'], [0.075, '#0d5fa8']]) {          // біла обвідка — щоб видно на піску
-      g.strokeStyle = c; g.lineWidth = s * w;
-      for (const dy of [-0.1, 0.1]) {
-        g.beginPath(); g.moveTo(cx - s * 0.27, cy + s * dy);
-        g.quadraticCurveTo(cx - s * 0.135, cy + s * (dy - 0.14), cx, cy + s * dy); g.quadraticCurveTo(cx + s * 0.135, cy + s * (dy + 0.14), cx + s * 0.27, cy + s * dy);
-        g.stroke();
-      }
+    g.strokeStyle = '#1a6fb0'; g.lineWidth = s * 0.06; g.lineCap = 'round';
+    for (const dy of [-0.08, 0.1]) {
+      g.beginPath(); g.moveTo(cx - s * 0.24, cy + s * dy);
+      g.quadraticCurveTo(cx - s * 0.12, cy + s * (dy - 0.12), cx, cy + s * dy); g.quadraticCurveTo(cx + s * 0.12, cy + s * (dy + 0.12), cx + s * 0.24, cy + s * dy);
+      g.stroke();
     }
   } else if (k === IT_RESIST) {                                      // панцир черепахи
     for (const [dx, dy] of [[-0.18, -0.12], [0.18, -0.12], [-0.18, 0.14], [0.18, 0.14]]) ellipse(g, cx + s * dx, cy + s * dy, s * 0.06, s * 0.045, '#6fae5a');

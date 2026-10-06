@@ -142,9 +142,15 @@ function wall(g, s) {
 }
 
 // Бонуси на круглому печиві з глазур'ю
+const ITEM_BG = { [IT_BOMB]: '#7ec8ff', [IT_FIRE]: '#ffb07e', [IT_SPEED]: '#fff07e', [IT_PASS]: '#d6b8ff', [IT_RESIST]: '#9ef0b0', [IT_REMOTE]: '#b8f0ff' };
 function item(g, k, s) {
   const cx = s / 2, cy = s / 2;
-  ellipse(g, cx, s * 0.84, s * 0.26, s * 0.07, 'rgba(120,40,70,0.3)');      // без значка — лише тінь
+  circle(g, cx + s * 0.02, cy + s * 0.04, s * 0.4, 'rgba(120,40,70,0.25)');
+  circle(g, cx, cy, s * 0.4, COOKIE);
+  g.fillStyle = ITEM_BG[k];
+  g.beginPath();
+  for (let j = 0; j <= 16; j++) { const a = j / 16 * TAU, r = s * (0.33 + (j % 2 ? 0.02 : 0)); j ? g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r) : g.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+  g.closePath(); g.fill();
   if (k === IT_BOMB) candyBomb(g, cx, cy + s * 0.03, s * 0.15, false);
   else if (k === IT_FIRE) { flameShape(g, cx, cy, s * 0.22, '#ff4d8d'); flameShape(g, cx, cy + s * 0.05, s * 0.13, '#ffd23f'); }
   else if (k === IT_SPEED) {
