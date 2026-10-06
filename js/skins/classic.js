@@ -1,4 +1,4 @@
-// classic.js — стиль «За замовчуванням»: зелене поле, сірі стовпи, цегла, бомбермени в шоломах.
+// classic.js — стиль «За замовчуванням»: зелене поле, сірі стовпи, цегла, круглі створіння в окулярах.
 import { DX, IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
 import { TAU, rr, rnd, circle, bevel, shade, flameShape, bombShape, spark, bombBeat, bombFlash, pillarShade, remoteIcon } from './common.js';
 
@@ -8,7 +8,7 @@ const C = {
   border: '#596072', borderHi: '#7d8597', borderLo: '#3b404d',
   brick: '#c8743c', brickHi: '#e19a5c', brickLo: '#8c4a22', mortar: '#7a3f1d',
   wall: '#454b5a', wallHi: '#6b7387', wallLo: '#2b2f39', rivet: '#9aa3b6',
-  skin: '#ffd2a8', glove: '#ff8fb1', visor: '#1d2030',
+  boot: '#4a3426', strap: '#3b2a20', lens: '#8fd8ff', lensRim: '#c9a227', visor: '#1d2030',
 };
 
 // Тло — шпалери з бомб і вогників
@@ -131,58 +131,76 @@ function bomb(g, x, y, s, k, T) {
   spark(g, cx + r * 1.2, cy - r * 1.05, s);
 }
 
-// Гравець: шолом кольору гравця, обличчя з очима в бік руху, руки й ноги; мертвий — з хрестиками
+// Гравець: кругле створіння кольору гравця з окулярами-«консервами» на лобі, очі в бік руху, черевики; мертвий — з хрестиками
 function player(g, p, s, T, { col, walk, bob, dead }) {
-  // ноги
-  g.fillStyle = C.glove;
-  g.beginPath(); g.ellipse(-s * 0.13, s * 0.36 + walk * s * 0.05, s * 0.1, s * 0.07, 0, 0, TAU); g.fill();
-  g.beginPath(); g.ellipse(s * 0.13, s * 0.36 - walk * s * 0.05, s * 0.1, s * 0.07, 0, 0, TAU); g.fill();
-  // тулуб
-  g.fillStyle = shade(col, -0.15);
-  rr(g, -s * 0.2, s * 0.04 - bob, s * 0.4, s * 0.3, s * 0.12); g.fill();
-  g.fillStyle = '#1e2130';
-  g.fillRect(-s * 0.2, s * 0.17 - bob, s * 0.4, s * 0.05);
+  // черевики
+  g.fillStyle = C.boot;
+  g.beginPath(); g.ellipse(-s * 0.14, s * 0.37 + walk * s * 0.05, s * 0.11, s * 0.07, 0, 0, TAU); g.fill();
+  g.beginPath(); g.ellipse(s * 0.14, s * 0.37 - walk * s * 0.05, s * 0.11, s * 0.07, 0, 0, TAU); g.fill();
   // руки
-  g.fillStyle = C.glove;
-  g.beginPath(); g.arc(-s * 0.25, s * 0.16 - bob - walk * s * 0.04, s * 0.075, 0, TAU); g.fill();
-  g.beginPath(); g.arc(s * 0.25, s * 0.16 - bob + walk * s * 0.04, s * 0.075, 0, TAU); g.fill();
-  // голова-шолом
-  const hy = -s * 0.14 - bob;
-  g.fillStyle = col;
-  g.beginPath(); g.arc(0, hy, s * 0.27, 0, TAU); g.fill();
+  g.fillStyle = shade(col, -0.3);
+  g.beginPath(); g.arc(-s * 0.33, s * 0.1 - bob - walk * s * 0.04, s * 0.07, 0, TAU); g.fill();
+  g.beginPath(); g.arc(s * 0.33, s * 0.1 - bob + walk * s * 0.04, s * 0.07, 0, TAU); g.fill();
+  // тіло
+  const cy = -s * 0.03 - bob, R = s * 0.33;
+  const body = () => { g.beginPath(); g.ellipse(0, cy, R, R * 1.02, 0, 0, TAU); };
+  body(); g.fillStyle = col; g.fill();
+  g.save(); body(); g.clip();
+  if (p.dr !== 1) {                                               // живіт
+    g.fillStyle = shade(col, 0.3);
+    g.beginPath(); g.ellipse(0, cy + s * 0.2, s * 0.2, s * 0.13, 0, 0, TAU); g.fill();
+  }
+  g.fillStyle = C.strap;                                          // ремінець окулярів
+  g.fillRect(-R, cy - s * 0.17, R * 2, s * 0.07);
+  g.restore();
   g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = Math.max(1, s * 0.025);
-  g.stroke();
+  body(); g.stroke();
   g.fillStyle = 'rgba(255,255,255,0.35)';
-  g.beginPath(); g.ellipse(-s * 0.1, hy - s * 0.13, s * 0.08, s * 0.045, -0.5, 0, TAU); g.fill();
-  // антена
-  g.strokeStyle = shade(col, -0.35); g.lineWidth = Math.max(1, s * 0.03);
-  g.beginPath(); g.moveTo(0, hy - s * 0.26); g.lineTo(0, hy - s * 0.36); g.stroke();
-  g.fillStyle = C.glove;
-  g.beginPath(); g.arc(0, hy - s * 0.38, s * 0.055, 0, TAU); g.fill();
-  // обличчя (у бік руху), зі спини — без обличчя
-  const fx = (DX[p.dr] || 0) * s * 0.07, fy = (p.dr === 3 || !p.dr) ? s * 0.02 : 0;
-  if (p.dr === 1) return;
-  g.fillStyle = C.skin;
-  rr(g, -s * 0.17 + fx, hy - s * 0.08 + fy, s * 0.34, s * 0.2, s * 0.08); g.fill();
-  g.fillStyle = C.visor;
+  g.beginPath(); g.ellipse(-s * 0.14, cy - s * 0.22, s * 0.07, s * 0.04, -0.6, 0, TAU); g.fill();
+  if (p.dr === 1) {                                               // зі спини — пряжка ремінця
+    g.fillStyle = C.lensRim; g.fillRect(-s * 0.04, cy - s * 0.175, s * 0.08, s * 0.08);
+    return;
+  }
+  // окуляри й обличчя (у бік руху)
+  const fx = (DX[p.dr] || 0) * s * 0.08, fy = (p.dr === 3 || !p.dr) ? s * 0.01 : 0;
+  for (const ex of [-0.1, 0.1]) {
+    const lx = ex * s + fx, ly = cy - s * 0.135;
+    circle(g, lx, ly, s * 0.075, C.lensRim);
+    circle(g, lx, ly, s * 0.05, C.lens);
+    circle(g, lx - s * 0.018, ly - s * 0.018, s * 0.016, 'rgba(255,255,255,0.8)');
+  }
+  const ey = cy + s * 0.03 + fy;
   if (dead) {
     g.strokeStyle = C.visor; g.lineWidth = Math.max(1, s * 0.03);
-    for (const ex of [-0.07, 0.07]) {
-      const ox = ex * s + fx, oy = hy + s * 0.02 + fy, e = s * 0.035;
-      g.beginPath(); g.moveTo(ox - e, oy - e); g.lineTo(ox + e, oy + e); g.moveTo(ox + e, oy - e); g.lineTo(ox - e, oy + e); g.stroke();
+    for (const ex of [-0.09, 0.09]) {
+      const ox = ex * s + fx, e = s * 0.035;
+      g.beginPath(); g.moveTo(ox - e, ey - e); g.lineTo(ox + e, ey + e); g.moveTo(ox + e, ey - e); g.lineTo(ox - e, ey + e); g.stroke();
     }
   } else {
-    for (const ex of [-0.07, 0.07]) { rr(g, ex * s + fx - s * 0.025, hy - s * 0.03 + fy, s * 0.05, s * 0.1, s * 0.025); g.fill(); }
+    const px = (DX[p.dr] || 0) * s * 0.02, py = p.dr === 3 ? s * 0.015 : 0;
+    for (const ex of [-0.09, 0.09]) {
+      g.fillStyle = '#fff';
+      g.beginPath(); g.ellipse(ex * s + fx, ey, s * 0.055, s * 0.065, 0, 0, TAU); g.fill();
+      circle(g, ex * s + fx + px, ey + py + s * 0.01, s * 0.03, C.visor);
+    }
   }
+  g.strokeStyle = C.visor; g.lineWidth = Math.max(1, s * 0.025);  // рот
+  g.beginPath(); g.arc(fx, ey + s * 0.08, s * 0.05, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
 }
 
-// Монстри: 0 — помаранчева кулька, 1 — фіолетовий колючий, 2 — привид
+// Монстри: 0 — блакитний слиз, 1 — фіолетовий колючий, 2 — привид
 function monster(g, m, s, T, wob) {
-  if (m.k === 0) {
-    g.fillStyle = '#ff8a3d';
-    g.beginPath(); g.ellipse(0, -wob * s * 0.03, s * 0.34, s * 0.32 + wob * s * 0.02, 0, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.3)';
-    g.beginPath(); g.ellipse(-s * 0.12, -s * 0.15, s * 0.08, s * 0.05, -0.6, 0, TAU); g.fill();
+  if (m.k === 0) {                                                // слиз: купол, що пружинить, з краплями внизу
+    const b = s * 0.34, w = s * (0.42 - wob * 0.03), h = s * (0.44 + wob * 0.05);
+    g.fillStyle = '#4fc3e8';
+    g.beginPath(); g.moveTo(-w, b);
+    g.bezierCurveTo(-w * 0.9, b - h * 1.3, w * 0.9, b - h * 1.3, w, b);
+    g.closePath(); g.fill();
+    circle(g, -s * 0.2, b, s * 0.05, '#4fc3e8'); circle(g, s * 0.12, b + s * 0.01, s * 0.04, '#4fc3e8');
+    g.fillStyle = '#2b8fb8';
+    g.fillRect(-w, b - s * 0.04, w * 2, s * 0.04);
+    g.fillStyle = 'rgba(255,255,255,0.4)';
+    g.beginPath(); g.ellipse(-s * 0.15, b - h * 0.75, s * 0.07, s * 0.045, -0.7, 0, TAU); g.fill();
   } else if (m.k === 1) {
     g.fillStyle = '#8e44ad';
     g.beginPath();
@@ -206,7 +224,7 @@ function monster(g, m, s, T, wob) {
     }
     g.closePath(); g.fill();
   }
-  eyes(g, m, s, m.k === 2 ? -s * 0.1 : -s * 0.04);
+  eyes(g, m, s, m.k === 2 ? -s * 0.1 : m.k === 0 ? s * 0.07 : -s * 0.04);
   if (m.k === 1) {                                                // сердиті брови
     const eyeY = -s * 0.04;
     g.strokeStyle = '#2b1236'; g.lineWidth = Math.max(1, s * 0.035);

@@ -26,7 +26,7 @@ const BOMB = { o: 'u8', n: 'u16', x: 'u8', y: 'u8', t: 'f64', p: 'u8', rc: 'bool
 const DET = { o: 'u8', n: 'u16', b: 'f64', t: 'f64' };
 
 export const net = createNet({
-  url: SIGNAL_URL, game: 'bomberman', room: S.roomId,
+  url: SIGNAL_URL, game: 'crossbomb', room: S.roomId,
   messages: {
     hi: { broadcast: true, schema: { n: 'str' } },                   // ім'я
     // стан кімнати від хоста: налаштування, люди лоббі, таблиця перемог, раунд, що йде, раунд, за який уже зараховано результат

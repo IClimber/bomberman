@@ -1,13 +1,14 @@
 // audio.js — звуки, згенеровані Web Audio (без файлів). Вимкнення запам'ятовується в localStorage; музика — окремо (music.js).
 let ac = null, master = null, noiseBuf = null;
 let muted = false;
-try { muted = localStorage.getItem('bomberman-mute') === '1'; } catch {}
+// bomberman-* — ключі до перейменування гри (читаються, якщо нових ще немає)
+try { muted = (localStorage.getItem('crossbomb-mute') ?? localStorage.getItem('bomberman-mute')) === '1'; } catch {}
 
 export const isMuted = () => muted;
 export const audioCtx = () => ac;                                  // для музики (music.js), з'являється після unlock
 export function setMuted(v) {
   muted = !!v;
-  try { localStorage.setItem('bomberman-mute', muted ? '1' : '0'); } catch {}
+  try { localStorage.setItem('crossbomb-mute', muted ? '1' : '0'); } catch {}
   if (master) master.gain.value = muted ? 0 : 0.55;
 }
 // Браузер дозволяє звук лише після дії користувача: клавіша, клік, а на тачскріні — коли палець відпускають

@@ -1,5 +1,5 @@
 // retro.js — «Ретро 8-біт»: усе — піксель-арт 16×16, як на NES: зелене поле, бетонні стовпи, червона цегла,
-// бомбермен кольору гравця, кулька, синій злюка, привид. Спрайти кешуються під розмір клітинки.
+// круглі створіння кольору гравця в окулярах, блакитний слиз, колючка, привид. Спрайти кешуються під розмір клітинки.
 import { IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, IT_REMOTE } from '../sim.js';
 import { makeCanvas, pix, rnd, shade, ellipse, bombBeat, bombFlash } from './common.js';
 
@@ -212,122 +212,134 @@ function bomb(g, x, y, s, k, T) {
   g.imageSmoothingEnabled = true;
 }
 
-// Гравець: шолом кольору гравця, рожеве обличчя, рожеві рукавиці й антена; спереду, ззаду, збоку; два кадри ходи
-const HEAD = {
+// Гравець: кругле створіння кольору гравця з окулярами-«консервами» на лобі й черевиками; спереду, ззаду, збоку; два кадри ходи
+const TOP = {
   front: [
-    '.......PP.......',
-    '.......PP.......',
-    '........O.......',
+    '................',
     '.....OOOOOO.....',
-    '....OHHHHHHO....',
-    '...OHHHHHHHHO...',
-    '...OHFFFFFFHO...',
-    '...OHFEFFEFHO...',
-    '...OHFEFFEFHO...',
-    '...OhFFFFFFhO...',
-    '....OhhhhhhO....',
+    '...OOLLHHHHOO...',
+    '..OLHOOHHOOHHO..',
+    '.OSSOGWOOGWOSSO.',
+    '.OHHOGGOOGGOHHO.',
+    '.OHHHOOHHOOHHHO.',
+    '.OHHWWHHHHWWHHO.',
+    '.OHHEEHHHHEEHHO.',
+    '.OHHHHHHHHHHHHO.',
+    '.OhHHHHOOHHHHhO.',
+    '..OhHHHHHHHHhO..',
+    '...OhhHHHHhhO...',
+    '....OOOOOOOO....',
   ],
   dead: [
-    '.......PP.......',
-    '.......PP.......',
-    '........O.......',
+    '................',
     '.....OOOOOO.....',
-    '....OHHHHHHO....',
-    '...OHHHHHHHHO...',
-    '...OHFFFFFFHO...',
-    '...OHFFFFFFHO...',
-    '...OHEEFFEEHO...',
-    '...OhFFFFFFhO...',
-    '....OhhhhhhO....',
+    '...OOLLHHHHOO...',
+    '..OLHOOHHOOHHO..',
+    '.OSSOGWOOGWOSSO.',
+    '.OHHOGGOOGGOHHO.',
+    '.OHHHOOHHOOHHHO.',
+    '.OHEHEHHHHEHEHO.',
+    '.OHHEHHHHHHEHHO.',
+    '.OHEHEHHHHEHEHO.',
+    '.OhHHHOOOOHHHhO.',
+    '..OhHHHHHHHHhO..',
+    '...OhhHHHHhhO...',
+    '....OOOOOOOO....',
   ],
   back: [
-    '.......PP.......',
-    '.......PP.......',
-    '........O.......',
+    '................',
     '.....OOOOOO.....',
-    '....OHHHHHHO....',
-    '...OHHHHHHHHO...',
-    '...OHHHHHHHHO...',
-    '...OHHHHHHHHO...',
-    '...OHHHHHHHHO...',
-    '...OhHHHHHHhO...',
-    '....OhhhhhhO....',
+    '...OOHHHHHHOO...',
+    '..OHHHHHHHHHHO..',
+    '.OSSSSSYYSSSSSO.',
+    '.OHHHHHHHHHHHHO.',
+    '.OHHHHHHHHHHHHO.',
+    '.OHHHHHHHHHHHHO.',
+    '.OHHHHHHHHHHHHO.',
+    '.OHHHHHHHHHHHHO.',
+    '.OhHHHHHHHHHHhO.',
+    '..OhHHHHHHHHhO..',
+    '...OhhHHHHhhO...',
+    '....OOOOOOOO....',
   ],
   side: [
-    '......PP........',
-    '......PP........',
-    '.......O........',
+    '................',
     '.....OOOOOO.....',
-    '....OHHHHHHO....',
-    '...OHHHHHHHHO...',
-    '...OHHHFFFFFO...',
-    '...OHHHFFFEFO...',
-    '...OHHHFFFEFO...',
-    '...OhhHFFFFFO...',
-    '....OhhhhhhO....',
+    '...OOLLHHHHOO...',
+    '..OLHHHHHOOHHO..',
+    '.OSSSSSSOGWOSSO.',
+    '.OHHHHHHOGGOHHO.',
+    '.OHHHHHHHOOHHHO.',
+    '.OHHHHHHHHHWWHO.',
+    '.OHHHHHHHHHWEHO.',
+    '.OHHHHHHHHHHHHO.',
+    '.OhHHHHHHHHHOHO.',
+    '..OhHHHHHHHHhO..',
+    '...OhhHHHHhhO...',
+    '....OOOOOOOO....',
   ],
 };
-const BODY = {
+const FEET = {
   front: [
-    ['...PObbbbbbOP...', '...PObKKKKbOP...', '....ObbbbbbO....', '....SSS..SSS....', '....SSS..SSS....'],
-    ['...PObbbbbbOP...', '...PObKKKKbOP...', '....ObbbbbbO....', '....SSS..SSS....', '.........SSS....'],
-    ['...PObbbbbbOP...', '...PObKKKKbOP...', '....ObbbbbbO....', '....SSS..SSS....', '....SSS.........'],
+    ['...OBBO..OBBO...', '...OOOO..OOOO...'],
+    ['..OBBO...OBBO...', '..OOOO...OOOO...'],
+    ['...OBBO...OBBO..', '...OOOO...OOOO..'],
   ],
   side: [
-    ['....ObbbbbbOP...', '....ObKKKKbOP...', '....ObbbbbbO....', '.....SSS.SSS....', '.....SSS.SSS....'],
-    ['...PObbbbbbO....', '...PObKKKKbO....', '....ObbbbbbO....', '....SSS...SSS...', '....SSS...SSS...'],
-    ['....ObbbbbbOP...', '....ObKKKKbOP...', '....ObbbbbbO....', '......SSSSS.....', '......SSSSS.....'],
+    ['....OBBOOBBBO...', '....OOOOOOOOO...'],
+    ['..OBBO...OBBBO..', '..OOOO...OOOOO..'],
+    ['...OBBO.OBBBO...', '...OOOO.OOOOO...'],
   ],
 };
 function player(g, p, s, T, { col, walk, dead }) {
   const view = dead ? 'dead' : p.dr === 1 ? 'back' : p.dr === 2 || p.dr === 4 ? 'side' : 'front';
   const fr = walk ? (walk > 0 ? 1 : 2) : 0, flip = p.dr === 4;
-  const c = spr(`p${col}${view}${fr}${flip ? 'f' : ''}`, s, (q) => pix(q, 0, 0, s, [...HEAD[view], ...BODY[view === 'side' ? 'side' : 'front'][fr]], {
-    O: '#000000', H: col, h: shade(col, -0.35), F: '#fcbcb0', E: '#000000', P: '#fc74b4',
-    b: shade(col, -0.2), K: '#000000', S: '#a81000',
+  const c = spr(`p${col}${view}${fr}${flip ? 'f' : ''}`, s, (q) => pix(q, 0, 0, s, [...TOP[view], ...FEET[view === 'side' ? 'side' : 'front'][fr]], {
+    O: '#000000', H: col, h: shade(col, -0.35), L: shade(col, 0.5), E: '#000000', W: '#fcfcfc',
+    S: '#503000', Y: '#f8b800', G: '#3cbcfc', B: '#7c3c00',
   }, flip));
   g.imageSmoothingEnabled = false;
   g.drawImage(c, -s / 2, -s / 2 - Math.round(Math.abs(walk) * s / N));
   g.imageSmoothingEnabled = true;
 }
 
-// Монстри: 0 — помаранчева кулька, 1 — синій злюка, 2 — привид (два кадри «хвоста»)
+// Монстри: 0 — блакитний слиз, 1 — фіолетова колючка, 2 — привид (два кадри «хвоста»)
 const MON = [
   [
     '................',
-    '.....OOOOOO.....',
-    '....OAAAAAAO....',
-    '...OAAWAAAAAO...',
-    '..OAAWWAAAAAAO..',
-    '..OAAAAAAAAAAO..',
-    '..OAAWWAAWWAAO..',
-    '..OAAWKAAWKAAO..',
-    '..OAAWKAAWKAAO..',
-    '..OAAAAAAAAAAO..',
-    '..OAAAAAAAAAAO..',
-    '...OAAKKKKAAO...',
-    '....OAAAAAAO....',
-    '.....OOAAOO.....',
-    '......OAAO......',
-    '.......OO.......',
-  ],
-  [
+    '................',
     '................',
     '.......OO.......',
-    '......OBBO......',
-    '.....OBBBBO.....',
-    '....OBBBBBBO....',
-    '...OBBBBBBBBO...',
-    '..OBKKBBBBKKBO..',
-    '..OBBWKBBKWBBO..',
-    '..OBBWKBBKWBBO..',
-    '..OBBBBBBBBBBO..',
-    '..OBBKKKKKKBBO..',
-    '..OBBKWKWKWBBO..',
-    '...OBBBBBBBBO...',
-    '....OOBBBBOO....',
-    '...OBO.OO.OBO...',
-    '...OO......OO...',
+    '.....OOAAOO.....',
+    '....OALAAAAO....',
+    '...OALAAAAAAO...',
+    '...OALAAAAAAO...',
+    '..OAAWWAAWWAAO..',
+    '..OAAWKAAWKAAO..',
+    '.OAAAAAAAAAAAAO.',
+    '.OAAAAAKKAAAAAO.',
+    '.OaAAAAAAAAAAaO.',
+    'OaaAAAAAAAAAAaaO',
+    'OaaaaaaaaaaaaaaO',
+    '.OOOOOOOOOOOOOO.',
+  ],
+  [
+    '.......pp.......',
+    '..p....pp....p..',
+    '..pp..OPPO..pp..',
+    '...ppOPPPPOpp...',
+    '....OPPPPPPO....',
+    'pp.OPPPPPPPPO.pp',
+    '.ppOPKPPPPKPOpp.',
+    '..OPPPKPPKPPPO..',
+    '..OPPWWPPWWPPO..',
+    '..OPPWKPPWKPPO..',
+    'ppOPPPPPPPPPPOpp',
+    '.pOPPPPKKPPPPOp.',
+    '..OPPPPPPPPPPO..',
+    '...ppOPPPPOpp...',
+    '..pp..OPPO..pp..',
+    '..p....pp....p..',
   ],
   [
     '................',
@@ -349,7 +361,7 @@ const MON = [
   ],
 ];
 const GHOST_TAIL = ['..OGGGOGGOGGGO..', '..OGGO.OO.OGGO..', '...OO......OO...'];
-const MON_PAL = { O: '#000000', A: '#fc7400', W: '#fcfcfc', K: '#000000', B: '#3c78f8', G: '#e8f0fc' };
+const MON_PAL = { O: '#000000', A: '#3cbcfc', a: '#0070ec', L: '#a4e4fc', W: '#fcfcfc', K: '#000000', P: '#a838f0', p: '#6818a8', G: '#e8f0fc' };
 function monster(g, m, s, T) {
   const fr = Math.floor(T / 220 + m.i) % 2, flip = m.d === 4;
   const rows = m.k === 2 && fr ? [...MON[2].slice(0, 13), ...GHOST_TAIL] : MON[m.k];

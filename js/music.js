@@ -1,6 +1,6 @@
 // music.js — фонова мелодія стилю графіки (Web Audio, без файлів): мелодії — у tunes.js, рушій — тут.
 // Секвенсор планує ноти на AHEAD с наперед таймером; у прихованій вкладці музика стихає й починається знову, коли вкладку відкрили.
-// Вимкнення — окремо від звуків (localStorage `bomberman-music`; немає — як звуки).
+// Вимкнення — окремо від звуків (localStorage `crossbomb-music`; немає — як звуки).
 import { TUNES } from './tunes.js';
 
 const VOL = 0.14, AHEAD = 0.35, FADE = 0.5;
@@ -218,13 +218,13 @@ export const DRUMS = Object.keys(DRUM);
 // ================= Програвач =================
 let off = null;
 try {
-  const v = localStorage.getItem('bomberman-music');
-  off = v === null ? localStorage.getItem('bomberman-mute') === '1' : v === '0';
+  const v = localStorage.getItem('crossbomb-music') ?? localStorage.getItem('bomberman-music');
+  off = v === null ? (localStorage.getItem('crossbomb-mute') ?? localStorage.getItem('bomberman-mute')) === '1' : v === '0';
 } catch { off = false; }
 export const isMusicOff = () => off;
 export function setMusicOff(v) {
   off = !!v;
-  try { localStorage.setItem('bomberman-music', off ? '0' : '1'); } catch {}
+  try { localStorage.setItem('crossbomb-music', off ? '0' : '1'); } catch {}
   tick();
 }
 

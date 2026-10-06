@@ -57,7 +57,7 @@ hooks.round = () => {
   if (R && cue.r !== R.r) {
     cue = { r: R.r, beep: 99, sd: false, end: false };
     R.board.onBlast = () => sfx.blast();
-    R.board.onRevive = (cells, by) => console.warn('bomberman: блоки відновились після перерахунку', {
+    R.board.onRevive = (cells, by) => console.warn('crossbomb: блоки відновились після перерахунку', {
       cells: cells.map(i => [i % R.board.map.GW, Math.floor(i / R.board.map.GW)]), lateBy: by, now: net.sharedNow(), T: R.board.T });
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     held.length = 0;

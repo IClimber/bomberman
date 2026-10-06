@@ -1,7 +1,7 @@
 {
-  "name": "bomberman",
+  "name": "crossbomb",
   "private": true,
   "type": "module",
-  "description": "Bomberman — браузерна P2P мультиплеєрна гра",
+  "description": "Crossbomb — браузерна P2P мультиплеєрна гра",
   "scripts": { "test": "node --test test/*.test.mjs" }
 }
