@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parse, parseDrum, freq, compile } from '../js/music.js';
+import { parse, parseDrum, freq, compile, INSTRUMENTS, DRUMS } from '../js/music.js';
 import { TUNES } from '../js/tunes.js';
 
 test('музика: ноти й розбір доріжки', () => {
@@ -25,4 +25,21 @@ test('музика: кожна мелодія розбирається, дорі
       if (!tr.d) assert.ok(tr.w, `${t.name}: невідомий інструмент ${tr.i}`);
     }
   }
+});
+
+test('музика: мелодія на кожен стиль, у тому ж порядку; кожен такт — рівно `bar` кроків; інструменти й ударні відомі', async () => {
+  const files = ['classic', 'cyber', 'retro', 'winter', 'space', 'halloween', 'hawaii', 'notebook', 'village', 'egypt', 'west', 'candy', 'ocean'];
+  const names = await Promise.all(files.map(async f => (await import(`../js/skins/${f}.js`)).default.name));
+  assert.deepEqual(TUNES.map(t => t.name), names);
+  for (const t of TUNES)
+    for (const tr of t.tracks) {
+      const what = `${t.name}: ${tr.i || tr.d}`;
+      if (tr.d) {
+        assert.ok(DRUMS.includes(tr.d), what);
+        for (const bar of tr.p.split('|')) assert.equal(parseDrum(bar).length, t.bar, what);
+      } else {
+        assert.ok(INSTRUMENTS.includes(tr.i), what);
+        tr.n.split('|').forEach((bar, k) => assert.equal(parse(bar, tr.len).L, t.bar, `${what}, такт ${k + 1}`));
+      }
+    }
 });
