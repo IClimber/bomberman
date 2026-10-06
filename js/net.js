@@ -5,7 +5,7 @@ import { createNet } from 'https://iclimber.github.io/p2p-net/v1/net.js';
 import { S, ID_RE, COLORS, EMOJI, cleanName, uq8 } from './state.js';
 import { SIZES, FUSE_MS, bombKey, pickKey, detKey, hashStr } from './sim.js';
 import { SKINS } from './skins/index.js';
-import { newRound, kill, MODE_VS, KB_NONE, RES_GOING } from './round.js';
+import { newRound, kill, roundNow, MODE_VS, KB_NONE, RES_GOING } from './round.js';
 import * as host from './host.js';
 
 export const SIGNAL_URL = 'wss://144-172-110-72.sslip.io/ws';
@@ -40,6 +40,7 @@ export const net = createNet({
     cfg: { schema: { m: 'u8', s: 'u8', d: 'u8', b: 'bool', v: 'u8' } },   // → хост: змінити налаштування
     ready: { schema: { r: 'bool', t: 'f64' } },                       // → хост: «Старт» / «Грати» натиснуто (чи скасовано) і коли
     back: { schema: {} },                                             // → хост: після раунду — усіх у лоббі
+    pause: { schema: { r: 'f64', p: 'bool' } },                       // → хост: пауза / продовжити (єдина людина раунду)
     // стан раунду від хоста (~10 Гц і одразу при змінах, повний): підсумок, слоти (боти — з позиціями),
     // монстри, знімок клітинок і активні бомби (для тих, хто дивиться з середини раунду)
     world: {
@@ -51,6 +52,7 @@ export const net = createNet({
         bo: [BOMB],
         en: 'u16', eh: 'u32',                                         // контрольна сума подій з часом ≤ ts − SYNC_LAG
         se: 'f64',                                                    // з цього часу стіни не падають (результат відомий; 0 — ні)
+        pa: 'f64', po: 'f64',                                         // пауза: з якого спільного часу (0 — ні), сума попередніх пауз
       },
     },
     // Учасник пропустив події (зв'язок рвався, сторінку заморожено): звіряємося з хостом
@@ -102,7 +104,7 @@ function parseLobby(d) {
   return d;
 }
 function parseWorld(d) {
-  if (d.r <= 0 || d.p > 1 || d.m > 1 || d.s >= SIZES.length || d.d > 2 || d.k > RES_GOING) return null;
+  if (d.r <= 0 || d.p > 1 || d.m > 1 || d.s >= SIZES.length || d.d > 2 || d.k > RES_GOING || d.pa < 0 || !(d.po >= 0)) return null;
   if (!d.sl.length || d.sl.length > 4 || d.mo.length > 256 || d.bo.length > 512) return null;
   for (const s of d.sl) {
     if ((s.i && !ID_RE.test(s.i)) || (!s.i && !s.b) || s.c >= COLORS.length || s.dr > 4) return null;
@@ -190,7 +192,7 @@ const ON = {
   evs(d, id) {
     const R = S.R;
     if (!R || d.r !== R.r || id !== net.hostId() || d.bo.length > 8000 || d.pk.length > 4000 || d.dt.length > 8000) return;
-    const now = net.sharedNow();
+    const now = roundNow(R, net.sharedNow());
     // події ботів — як у хоста: свої «бомби ботів» з часу, коли ми були відрізані й самі вели ботів, — геть
     const hb = new Set(d.bo.map(bombKey)), hp = new Set(d.pk.map(pickKey)), hd = new Set(d.dt.map(detKey));
     const own = (o) => !R.sl[o] || !R.sl[o].b;
@@ -207,6 +209,7 @@ const ON = {
   cfg(d) { if (net.isHost()) host.setCfg(d); },
   ready(d, id) { if (net.isHost()) host.setReady(id, d.r, d.t); },
   back() { if (net.isHost()) host.toLobby(); },
+  pause(d, id) { if (net.isHost()) host.setPause(id, d.r, d.p); },
 };
 
 // Стан раунду від хоста. Новий раунд — будуємо карту від зерна; глядач бере поле зі знімка.
@@ -221,7 +224,8 @@ function applyWorld(w) {
     S.mySlot = R.sl.findIndex(s => !s.b && s.i === net.id);
     hooks.round();
   }
-  const now = net.sharedNow(), past = fresh ? R.t0 : now;          // коли загинули ті, про кого дізнались лише зараз
+  R.pa = w.pa; R.po = w.po;
+  const now = roundNow(R, net.sharedNow()), past = fresh ? R.t0 : now;          // коли загинули ті, про кого дізнались лише зараз
   R.worldAt = performance.now();
   R.p = w.p; R.res = w.k; R.wn = w.wn;
   if (w.se) { R.se = w.se; R.board.stopWalls(w.se); }
@@ -293,6 +297,12 @@ export const act = {
   },
   name(n) {
     net.send('hi', { n });
+  },
+  pause(on) {                                                      // стан паузи прийде в world
+    const R = S.R;
+    if (!R || S.room?.g !== R.r) return;
+    if (net.isHost()) host.setPause(net.id, R.r, on);
+    else net.send('pause', { r: R.r, p: on }, net.hostId());
   },
   emo(e) {                                                         // реакція: над своїм гравцем чи в стрічці подій
     const t = performance.now(), was = S.emo.get(net.id);

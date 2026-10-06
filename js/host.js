@@ -5,7 +5,7 @@ import { net, hooks, lobbyMembers, nameOf, seedOf, resultShown, SYNC_LAG } from 
 import { S, COLORS, q8 } from './state.js';
 import { SIZES, mulberry32 } from './sim.js';
 import { SKINS } from './skins/index.js';
-import { newRound, hostStep, orphanDets, COUNTDOWN_MS, MODE_VS, RES_WIN, RES_TEAM_WIN, RES_GOING, KB_LEFT } from './round.js';
+import { newRound, hostStep, orphanDets, roundNow, canPause, setPaused, COUNTDOWN_MS, MODE_VS, RES_WIN, RES_TEAM_WIN, RES_GOING, KB_LEFT } from './round.js';
 
 export const WORLD_EVERY = 100;      // хост розсилає стан раунду раз на стільки мс (і одразу при змінах)
 const TICK_MS = 50;
@@ -38,7 +38,7 @@ export function memberGone(id) {
   if (R && R.p === 0) {
     const s = R.sl.find(e => !e.b && e.i === id && e.a);
     if (s) {
-      s.a = false; s.dt = net.sharedNow(); s.kb = KB_LEFT; s.pruned = true;
+      s.a = false; s.dt = roundNow(R, net.sharedNow()); s.kb = KB_LEFT; s.pruned = true;
       for (const e of orphanDets(R, s.o, s.dt)) { R.board.addDet(e); EV.det(e); }   // його бомби з детонатором — за запал
       hooks.death(s.o);
       sendWorld();
@@ -72,6 +72,12 @@ export function setReady(id, r, t) {
 // Після раунду — усіх у лоббі (підсумок висить, доки хтось не натисне «Вийти в лоббі» або всі — «Грати»)
 export function toLobby() {
   if (resultShown()) backToLobby();
+}
+// Пауза: ставить і знімає лише єдина людина раунду (див. canPause)
+export function setPause(id, r, on) {
+  const R = S.R;
+  if (!R || R.r !== r || S.room?.g !== r || (on ? !canPause(R, id) : R.sl.find(s => !s.b)?.i !== id)) return;
+  if (setPaused(R, on, net.sharedNow())) sendWorld();
 }
 
 // Старт: готових («Старт» / «Грати») не менше, ніж min(учасників лоббі, 4); у раунд — перші 4 за часом натискання,
@@ -140,7 +146,7 @@ export function sendWorld(to) {
   if (!to) lastWorld = performance.now();
   const ts = Number.isFinite(R.board.T) ? R.board.T : 0, dg = R.board.digest(ts - SYNC_LAG);
   net.send('world', {
-    r: R.r, p: R.p, m: R.m, s: R.s, d: R.d, t0: R.t0, ts, k: R.res, wn: R.wn, en: dg.n, eh: dg.h, se: R.se || 0,
+    r: R.r, p: R.p, m: R.m, s: R.s, d: R.d, t0: R.t0, ts, k: R.res, wn: R.wn, en: dg.n, eh: dg.h, se: R.se || 0, pa: R.pa, po: R.po,
     sl: R.sl.map(s => ({
       i: s.i, b: s.b, c: s.c, n: s.n, a: s.a, kb: s.kb, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv,
       nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs, rc: s.rc,
@@ -173,8 +179,7 @@ function tick() {
   const pnow = performance.now(), dt = lastTick ? Math.min(0.2, (pnow - lastTick) / 1000) : TICK_MS / 1000;
   lastTick = pnow;
   if (!S.room || !net.isHost()) { wasHost = false; return; }
-  const now = net.sharedNow();
-  if (!wasHost) { wasHost = true; becameHost(now); }
+  if (!wasHost) { wasHost = true; becameHost(); }
   touchMember(net.id);                                             // і сам: став хостом, ще не бувши в лоббі (новачок, а єдиний гравець кімнати сховав вкладку)
   for (const p of net.peers()) touchMember(p.id);                  // чий hi ще не дійшов
   prune(pnow);
@@ -183,7 +188,9 @@ function tick() {
   if (!S.room.g) return;
   const R = S.R;
   if (!R || R.r !== S.room.g) { backToLobby(); return; }          // раунду не знаємо — у лоббі
-  const changed = hostStep(R, now, dt, EV);
+  // на паузі все стоїть; людина загинула, вийшла чи раунд скінчився — пауза знімається
+  if (R.pa && !canPause(R, R.sl.find(s => !s.b)?.i)) setPaused(R, false, net.sharedNow());
+  const changed = !R.pa && hostStep(R, roundNow(R, net.sharedNow()), dt, EV);
   if (R.p === 1 && !R.ended) {                                    // підсумок: «Грати» — з чистого аркуша
     R.ended = true;
     for (const p of S.room.pp) { p.r = false; p.rt = 0; }
@@ -216,7 +223,7 @@ function prune(pnow) {
 // Стали хостом: ботів і монстрів ведемо від останніх відомих позицій. «Відколи не чути» — з нуля: записи з минулого
 // разу, коли були хостом, застарілі (інакше короткий обрив через пів хвилини одразу «прибирав» гравця, якого не чути).
 // Раунд уже зараховано (lobby.e — надійно; world з кінцем міг загубитися) — не зараховуємо вдруге.
-function becameHost(now) {
+function becameHost() {
   quietSince.clear();
   const R = S.R;
   if (!R) return;

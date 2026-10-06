@@ -123,6 +123,8 @@
     font-family: "Press Start 2P", monospace; font-size: 13px; padding: 9px 12px; border-radius: 10px;
     background: #1f2433e6; border: 1px solid var(--line); white-space: nowrap;
   }
+  .pauseBtn { pointer-events: auto; flex: none; }
+  .card.narrow { width: min(320px, 100%); align-items: center; }
   .timer.sd { color: #1b1d26; background: var(--bad); border-color: var(--bad); }
   .banner {
     position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); display: none;
@@ -221,6 +223,7 @@
 <div class="hud" id="hud">
   <div class="chips" id="chips"></div>
   <div class="timer" id="timer"></div>
+  <button class="icon pauseBtn" id="pauseBtn" aria-label="Пауза" title="Пауза (P)" hidden>⏸</button>
 </div>
 <div class="corner">
   <button class="icon" id="musicBtn" aria-label="Музика" title="Музика (N)">🎵</button>
@@ -282,7 +285,7 @@
     <details>
       <summary>Як грати</summary>
       <ul>
-        <li>WASD або стрілки — рух, пробіл — бомба. F — на весь екран, M — звуки, N — музика. 1–5 — реакції <span id="helpEmo"></span>.</li>
+        <li>WASD або стрілки — рух, пробіл — бомба. P — пауза (коли в раунді, крім тебе, лише боти; на телефоні — ⏸ угорі). F — на весь екран, M — звуки, N — музика. 1–5 — реакції <span id="helpEmo"></span>.</li>
         <li>На телефоні: стрілки ліворуч (веди пальцем), кнопка <span id="helpBomb">💣</span> праворуч.</li>
         <li>Бомба вибухає через 2,5 с хрестом. Вогонь зупиняють стовпи й блоки; блоки руйнуються, під деякими — бонуси.</li>
         <li>Вибух убиває всіх, і тебе теж. Бомба підриває сусідні бомби.</li>
@@ -305,6 +308,13 @@
       <button id="playBtn" class="primary">Грати</button>
     </div>
     <p class="sub" id="resNote"></p>
+  </div>
+</div>
+
+<div class="overlay" id="pause">
+  <div class="card narrow">
+    <h2>Пауза</h2>
+    <div class="btns"><button id="resumeBtn" class="primary">Продовжити</button></div>
   </div>
 </div>
 

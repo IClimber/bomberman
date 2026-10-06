@@ -683,3 +683,26 @@ test('крок хоста, коли час пішов назад (поле вж�
   assert.equal(bomb.t, 2000);
   assert.equal(B.dirty, false);
 }));
+
+test('пауза: лише єдина людина раунду; час раунду стоїть і не йде назад', async () => {
+  const { roundNow, canPause, setPaused } = await import('../js/round.js');
+  const R = newRound({ r: 1, seed: 5, m: MODE_VS, s: 0, d: 1, t0: 0, sl: people(1, 3) }), id = R.sl[0].i;
+  assert.ok(canPause(R, id));
+  assert.ok(!canPause(R, 'playerz0000'));
+  assert.ok(!canPause(newRound({ r: 1, seed: 5, m: MODE_VS, s: 0, d: 1, t0: 0, sl: people(2, 2) }), id));
+  assert.equal(roundNow(R, 1000), 1000);
+  assert.ok(setPaused(R, true, 1500));
+  assert.ok(!setPaused(R, true, 1600));
+  assert.equal(roundNow(R, 9000), 1500);
+  assert.ok(setPaused(R, false, 9000));
+  assert.equal(roundNow(R, 9500), 2000);
+  // стан паузи від хоста — із запізненням: у себе час уже пішов далі — стоїть, доки не наздожене
+  const C = newRound({ r: 1, seed: 5, m: MODE_VS, s: 0, d: 1, t0: 0, sl: people(1, 3) });
+  assert.equal(roundNow(C, 1550), 1550);
+  C.pa = 1500;
+  assert.equal(roundNow(C, 1600), 1550);
+  C.pa = 0; C.po = 1000;
+  assert.equal(roundNow(C, 2600), 1600);
+  kill(R, 0, 2000);
+  assert.ok(!canPause(R, id));
+});

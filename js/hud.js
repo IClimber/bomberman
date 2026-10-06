@@ -4,7 +4,7 @@ import { S, EMOJI } from './state.js';
 import { net, act, startNeed } from './net.js';
 import { sfx } from './audio.js';
 import { dot } from './lobby.js';
-import { RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, RES_GOING, KB_WALL, KB_MON, KB_LEFT } from './round.js';
+import { RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, RES_GOING, KB_WALL, KB_MON, KB_LEFT, canPause } from './round.js';
 import { MAX_BOMBS, MAX_FIRE, MAX_SPEED_UPS } from './sim.js';
 import { skinOf } from './skins/index.js';
 
@@ -104,6 +104,7 @@ export function renderHud(now) {
   if (!playing) {
     $('banner').classList.remove('show');
     $('result').classList.remove('show');
+    $('pause').classList.remove('show');
     chipsKey = '';
     return;
   }
@@ -116,7 +117,8 @@ export function renderHud(now) {
     return [s.c, `${s.n}${me ? ' (ти)' : ''}`, stats, s.a, me];
   });
   const timer = $('timer');
-  const rk = `${innerWidth}x${innerHeight}:${document.fonts?.status}:${Object.values(em).join('')}:${items.map(e => e[1]).join('\n')}`;
+  setProp($('pauseBtn'), 'hidden', !(canPause(R, net.id) && !R.pa));   // ⏸ — лише єдиній людині раунду
+  const rk = `${innerWidth}x${innerHeight}:${$('pauseBtn').hidden}:${document.fonts?.status}:${Object.values(em).join('')}:${items.map(e => e[1]).join('\n')}`;
   if (rk !== reserveKey) {                                           // вимірюємо найгірший випадок; нижче все перемалюється
     reserveKey = rk;
     chipsKey = '';
@@ -136,7 +138,10 @@ export function renderHud(now) {
   setText(timer, left > 0 ? fmt(left) : SD_TEXT);
 
   const me = R.sl[S.mySlot];
-  const banner = S.mySlot < 0 ? 'Раунд уже йде — ти дивишся. Зіграєш у наступному.'
+  const paused = !!R.pa && R.p === 0;
+  $('pause').classList.toggle('show', paused && S.mySlot >= 0);
+  const banner = paused && S.mySlot < 0 ? 'Пауза — гравець зупинив гру.'
+    : S.mySlot < 0 ? 'Раунд уже йде — ти дивишся. Зіграєш у наступному.'
     : !me.a && R.p === 0 ? 'Для тебе раунд скінчився — дивишся до кінця.' : '';
   setText($('banner'), banner);
   $('banner').classList.toggle('show', !!banner);

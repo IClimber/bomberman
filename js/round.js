@@ -38,7 +38,27 @@ export function newRound({ r, seed, m, s, d, t0, sl }) {
     };
   });
   const mons = map.mons.map(mo => ({ i: mo.i, k: mo.k, x: mo.x, y: mo.y, d: 0, a: true, dt: 0, kb: KB_NONE }));
-  return { r, seed, m, s, d, bd: coop ? COOP_BOTS : d, t0, coop, map, board, sl: slots, mons, p: 0, res: 0, wn: 255, endAt: 0 };
+  return { r, seed, m, s, d, bd: coop ? COOP_BOTS : d, t0, coop, map, board, sl: slots, mons, p: 0, res: 0, wn: 255, endAt: 0, pa: 0, po: 0, gt: -Infinity };
+}
+
+// Пауза — лише коли в раунді одна людина (решта — боти), жива, і раунд іде. Час раунду на паузі стоїть: усі часи раунду
+// (t0, бомби, смерті, стійкість, стіни) — спільний час мінус сумарна тривалість пауз (po); на паузі (pa — спільний час
+// її початку) — pa − po. Не назад (gt): стан паузи від хоста приходить із запізненням.
+export function roundNow(R, now) {
+  const t = (R.pa || now) - R.po;
+  if (!(t < R.gt)) R.gt = t;
+  return R.gt;
+}
+export function canPause(R, id) {
+  const h = R.sl.filter(s => !s.b);
+  return R.p === 0 && h.length === 1 && !!id && h[0].i === id && h[0].a;
+}
+// Пауза (on) чи продовження в спільний час now; false — нічого не змінилось
+export function setPaused(R, on, now) {
+  if (!!R.pa === on) return false;
+  if (on) R.pa = now;
+  else { R.po += now - R.pa; R.pa = 0; }
+  return true;
 }
 
 export function applyItem(s, kind, now) {

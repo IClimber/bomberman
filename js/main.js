@@ -4,7 +4,7 @@ import { S, EMOJI, q8 } from './state.js';
 import { net, hooks, act, nameOf, GRACE_MS } from './net.js';
 import { createRoom, startHostLoop } from './host.js';
 import { moveActor, speedOf, canPlace, makeMap, hashStr, DX, DY, MON } from './sim.js';
-import { killerAt, kill, applyItem, orphanDets, RES_WIN, RES_TEAM_WIN, RES_TEAM_LOSS, RES_GOING } from './round.js';
+import { killerAt, kill, applyItem, orphanDets, roundNow, canPause, RES_WIN, RES_TEAM_WIN, RES_TEAM_LOSS, RES_GOING } from './round.js';
 import { createRenderer } from './render.js';
 import { initLobby, renderLobby } from './lobby.js';
 import { renderHud, renderNet, toast, initHud, hudBottom, feedDeath, feedEmo } from './hud.js';
@@ -58,7 +58,7 @@ hooks.round = () => {
     cue = { r: R.r, beep: 99, sd: false, end: false };
     R.board.onBlast = () => sfx.blast();
     R.board.onRevive = (cells, by) => console.warn('crossbomb: блоки відновились після перерахунку', {
-      cells: cells.map(i => [i % R.board.map.GW, Math.floor(i / R.board.map.GW)]), lateBy: by, now: net.sharedNow(), T: R.board.T });
+      cells: cells.map(i => [i % R.board.map.GW, Math.floor(i / R.board.map.GW)]), lateBy: by, now: roundNow(R, net.sharedNow()), T: R.board.T });
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     held.length = 0;
   }
@@ -94,10 +94,15 @@ addEventListener('keydown', (e) => {
   if (d) {
     if (!held.includes(d)) held.push(d);
     if (S.R) e.preventDefault();
+  } else if (S.R?.pa && (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter')) {   // на паузі — «Продовжити»
+    e.preventDefault();
+    if (!e.repeat) togglePause();
   } else if (e.code === 'Space') {                                    // на підсумку пробіл і Enter — кнопкам («Грати»)
     if (S.R?.p === 0) { e.preventDefault(); if (!e.repeat) wantBomb = true; }
   } else if (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'NumpadEnter') {
     if (S.R?.p === 0) { e.preventDefault(); if (!e.repeat) wantDet = true; }
+  } else if (e.code === 'KeyP' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (!e.repeat) togglePause();
   } else if (KEY_EMO.test(e.code) && S.R && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
     const k = Number(KEY_EMO.exec(e.code)[1]) - 1;
     if (k < EMOJI.length && S.room?.g === S.R.r) act.emo(k);
@@ -113,6 +118,12 @@ addEventListener('blur', () => { held.length = 0; resetTouch(); });
 initTouch(() => { if (S.R) wantBomb = true; }, (k) => act.emo(k), () => { if (S.R) wantDet = true; });
 for (const type of ['pointerup', 'touchend', 'click']) addEventListener(type, unlock, { capture: true, passive: true });
 
+// Пауза — лише єдина людина раунду (решта — боти); ставить і знімає хост, стан приходить у world
+function togglePause() {
+  const R = S.R;
+  if (!R || S.room?.g !== R.r) return;
+  if (R.pa ? S.mySlot >= 0 : canPause(R, net.id)) act.pause(!R.pa);
+}
 function toggleFs() {
   if (document.fullscreenElement) document.exitFullscreen?.();
   else document.documentElement.requestFullscreen?.().catch(() => {});
@@ -126,6 +137,8 @@ function toggleMusic() {
   $('musicBtn').classList.toggle('off', isMusicOff());
 }
 $('fsBtn').onclick = (e) => { e.currentTarget.blur(); toggleFs(); };
+$('pauseBtn').onclick = (e) => { e.currentTarget.blur(); togglePause(); };
+$('resumeBtn').onclick = (e) => { e.currentTarget.blur(); togglePause(); };
 $('soundBtn').onclick = (e) => { e.currentTarget.blur(); unlock(); toggleMute(); };
 $('soundBtn').textContent = isMuted() ? '🔇' : '🔊';
 $('musicBtn').onclick = (e) => { e.currentTarget.blur(); unlock(); toggleMusic(); };
@@ -137,7 +150,7 @@ document.addEventListener('fullscreenchange', () => { $('fsBtn').textContent = d
 function stepMe(R, now, dt) {
   const s = R.sl[S.mySlot];
   if (!s) return;
-  if (!s.a || R.p !== 0 || now < R.t0) { s.mv = false; wantBomb = false; wantDet = false; return; }
+  if (!s.a || R.p !== 0 || now < R.t0 || R.pa) { s.mv = false; wantBomb = false; wantDet = false; return; }
   const B = R.board, dir = touch.dir || held[held.length - 1] || 0;
   s.mv = false;
   if (dir) {
@@ -205,7 +218,7 @@ function catchUp(R, now) {
 setInterval(() => {
   const R = S.R, s = R && R.sl[S.mySlot];
   if (!document.hidden || !s || !s.a || R.p !== 0 || S.room?.g !== R.r) return;
-  const now = net.sharedNow();
+  const now = roundNow(R, net.sharedNow());
   catchUp(R, now);
   R.board.advance(now);
   if (now >= R.t0) checkMe(R, s, now, R.mons);
@@ -243,7 +256,7 @@ function updateViews(R, dt) {
     let tx = s.x, ty = s.y;
     if (!host || !s.b) {
       const at = s.b ? R.worldAt : S.pos.get(s.i)?.at;
-      if (s.mv && at) {
+      if (s.mv && at && !R.pa) {
         const ahead = Math.min(PREDICT, speedOf(s.sp) * (pnow - at) / 1000);
         tx += DX[s.dr] * ahead; ty += DY[s.dr] * ahead;
       }
@@ -253,7 +266,7 @@ function updateViews(R, dt) {
   for (const m of R.mons) {
     if (!m.a) continue;
     let tx = m.x, ty = m.y;
-    if (!host && R.worldAt && m.d) {
+    if (!host && R.worldAt && m.d && !R.pa) {
       const ahead = Math.min(PREDICT, MON[m.k].speed * (pnow - R.worldAt) / 1000);
       tx += DX[m.d] * ahead; ty += DY[m.d] * ahead;
     }
@@ -292,8 +305,8 @@ function frame() {
   requestAnimationFrame(frame);
   const pnow = performance.now(), dt = Math.min(0.1, (pnow - lastFrame) / 1000);
   lastFrame = pnow;
-  const now = net.sharedNow(), R = S.R;
-  const playing = !!R && !!S.room && S.room.g === R.r;
+  const R = S.R, playing = !!R && !!S.room && S.room.g === R.r;
+  const now = playing ? roundNow(R, net.sharedNow()) : net.sharedNow();   // час раунду: на паузі стоїть
   if (playing) {
     if (S.mySlot >= 0) catchUp(R, now);
     R.board.advance(now);
@@ -303,7 +316,7 @@ function frame() {
   }
   renderHud(now);
   const me = playing && R.sl[S.mySlot];
-  $('controls').classList.toggle('show', !!me && me.a && R.p === 0);
+  $('controls').classList.toggle('show', !!me && me.a && R.p === 0 && !R.pa);
   const noDet = !(me && me.rc);
   if ($('detBtn').hidden !== noDet) $('detBtn').hidden = noDet;
   renderer.draw({
