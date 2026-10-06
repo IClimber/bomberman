@@ -173,11 +173,14 @@ function item(g, k, s) {
     poly(g, [[cx - s * 0.22, cy + s * 0.12], [cx - s * 0.3, cy + s * 0.02], [cx - s * 0.32, cy + s * 0.22]], '#5a8ab0');
     circle(g, cx + s * 0.13, cy - s * 0.07, s * 0.015, '#111');
   } else if (k === IT_PASS) {                                        // хвиля
-    g.strokeStyle = '#1a6fb0'; g.lineWidth = s * 0.06; g.lineCap = 'round';
-    for (const dy of [-0.08, 0.1]) {
-      g.beginPath(); g.moveTo(cx - s * 0.24, cy + s * dy);
-      g.quadraticCurveTo(cx - s * 0.12, cy + s * (dy - 0.12), cx, cy + s * dy); g.quadraticCurveTo(cx + s * 0.12, cy + s * (dy + 0.12), cx + s * 0.24, cy + s * dy);
-      g.stroke();
+    g.lineCap = 'round';
+    for (const [w, c] of [[0.13, '#fff'], [0.075, '#0d5fa8']]) {          // біла обвідка — щоб видно на піску
+      g.strokeStyle = c; g.lineWidth = s * w;
+      for (const dy of [-0.1, 0.1]) {
+        g.beginPath(); g.moveTo(cx - s * 0.27, cy + s * dy);
+        g.quadraticCurveTo(cx - s * 0.135, cy + s * (dy - 0.14), cx, cy + s * dy); g.quadraticCurveTo(cx + s * 0.135, cy + s * (dy + 0.14), cx + s * 0.27, cy + s * dy);
+        g.stroke();
+      }
     }
   } else if (k === IT_RESIST) {                                      // панцир черепахи
     for (const [dx, dy] of [[-0.18, -0.12], [0.18, -0.12], [-0.18, 0.14], [0.18, 0.14]]) ellipse(g, cx + s * dx, cy + s * dy, s * 0.06, s * 0.045, '#6fae5a');
