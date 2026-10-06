@@ -38,6 +38,8 @@
   button.on { background: #24563c; border-color: var(--ok); color: #dcfbe9; }
   button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #6aa8ff; outline-offset: 2px; }
   .icon { min-width: 40px; padding: 6px 10px; font-size: 17px; }
+  .icon.off { position: relative; opacity: 0.55; }                 /* музика вимкнена — 🎵 перекреслена */
+  .icon.off::after { content: ''; position: absolute; left: 9px; right: 9px; top: 50%; height: 2px; background: var(--ink); transform: rotate(-40deg); }
   .sw { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: none; box-shadow: 0 0 0 1px #0007; }
 
   /* ---------- Лоббі ---------- */
@@ -104,7 +106,7 @@
   /* ---------- Гра ---------- */
   .hud {
     position: fixed; top: 0; left: 0; right: 0; min-height: 56px; display: none; align-items: center; gap: 10px;
-    padding: 8px 112px 8px 12px; pointer-events: none;
+    padding: 8px 160px 8px 12px; pointer-events: none;
   }
   .hud.show { display: flex; }
   .chips { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 0; }
@@ -204,7 +206,7 @@
   }
   .emoBar.show { display: flex; }
   .emoBar button { width: 40px; height: 40px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; font-size: 24px; touch-action: none; }
-  .touch .hud { min-height: 0; flex-wrap: wrap; gap: 6px; padding: 6px 104px 6px 8px; }
+  .touch .hud { min-height: 0; flex-wrap: wrap; gap: 6px; padding: 6px 150px 6px 8px; }
   .touch .chips { gap: 4px; }
   .touch .chip { font-size: 11px; padding: 0 8px; gap: 4px; height: 25px; }
   @media (orientation: landscape) { .touch .chips { flex-wrap: nowrap; } }   /* поле обмежене висотою: чіпи в один рядок, ім'я скорочується */
@@ -221,7 +223,8 @@
   <div class="timer" id="timer"></div>
 </div>
 <div class="corner">
-  <button class="icon" id="soundBtn" aria-label="Звук" title="Звук (M)">🔊</button>
+  <button class="icon" id="musicBtn" aria-label="Музика" title="Музика (N)">🎵</button>
+  <button class="icon" id="soundBtn" aria-label="Звуки" title="Звуки (M)">🔊</button>
   <button class="icon" id="fsBtn" aria-label="На весь екран" title="На весь екран (F)">⛶</button>
 </div>
 <div class="banner" id="banner"></div>
@@ -279,7 +282,7 @@
     <details>
       <summary>Як грати</summary>
       <ul>
-        <li>WASD або стрілки — рух, пробіл — бомба. F — на весь екран, M — звук. 1–5 — реакції <span id="helpEmo"></span>.</li>
+        <li>WASD або стрілки — рух, пробіл — бомба. F — на весь екран, M — звуки, N — музика. 1–5 — реакції <span id="helpEmo"></span>.</li>
         <li>На телефоні: стрілки ліворуч (веди пальцем), кнопка <span id="helpBomb">💣</span> праворуч.</li>
         <li>Бомба вибухає через 2,5 с хрестом. Вогонь зупиняють стовпи й блоки; блоки руйнуються, під деякими — бонуси.</li>
         <li>Вибух убиває всіх, і тебе теж. Бомба підриває сусідні бомби.</li>

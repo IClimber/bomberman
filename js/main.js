@@ -8,7 +8,8 @@ import { killerAt, kill, applyItem, orphanDets, RES_WIN, RES_TEAM_WIN, RES_TEAM_
 import { createRenderer } from './render.js';
 import { initLobby, renderLobby } from './lobby.js';
 import { renderHud, renderNet, toast, initHud, hudBottom, feedDeath, feedEmo } from './hud.js';
-import { sfx, unlock, isMuted, setMuted } from './audio.js';
+import { sfx, unlock, isMuted, setMuted, audioCtx } from './audio.js';
+import { initMusic, isMusicOff, setMusicOff } from './music.js';
 import { initTouch, isTouch, touch, resetTouch } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
@@ -102,6 +103,7 @@ addEventListener('keydown', (e) => {
     if (k < EMOJI.length && S.room?.g === S.R.r) act.emo(k);
   } else if (e.code === 'KeyF' && !e.ctrlKey && !e.metaKey) toggleFs();
   else if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) toggleMute();
+  else if (e.code === 'KeyN' && !e.ctrlKey && !e.metaKey) toggleMusic();
 });
 addEventListener('keyup', (e) => {
   const d = KEY_DIR[e.code];
@@ -119,9 +121,16 @@ function toggleMute() {
   setMuted(!isMuted());
   $('soundBtn').textContent = isMuted() ? '🔇' : '🔊';
 }
+function toggleMusic() {
+  setMusicOff(!isMusicOff());
+  $('musicBtn').classList.toggle('off', isMusicOff());
+}
 $('fsBtn').onclick = (e) => { e.currentTarget.blur(); toggleFs(); };
 $('soundBtn').onclick = (e) => { e.currentTarget.blur(); unlock(); toggleMute(); };
 $('soundBtn').textContent = isMuted() ? '🔇' : '🔊';
+$('musicBtn').onclick = (e) => { e.currentTarget.blur(); unlock(); toggleMusic(); };
+$('musicBtn').classList.toggle('off', isMusicOff());
+initMusic(audioCtx, () => S.room?.v || 0);
 document.addEventListener('fullscreenchange', () => { $('fsBtn').textContent = document.fullscreenElement ? '🗗' : '⛶'; });
 
 // ================= Свій гравець =================
