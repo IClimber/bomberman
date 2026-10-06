@@ -205,6 +205,8 @@ export function checkEnd(R, now) {
   if (!res || (R.p !== 0 && res === RES_GOING)) { R.endAt = 0; return false; }
   if (!R.endAt) { R.endAt = now + END_GRACE_MS; return false; }
   if (now < R.endAt) return false;
+  // результат відомий (не «гра продовжується») — стіни раптової смерті більше не падають: з моменту, коли він настав
+  if (res !== RES_GOING) { R.se = R.endAt - END_GRACE_MS; R.board.stopWalls(R.se); R.board.advance(now); }
   R.p = 1; R.res = res; R.wn = wn; R.endAt = 0;
   return true;
 }

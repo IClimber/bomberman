@@ -172,6 +172,22 @@ test('раптова смерть: спіраль без стовпів, сті�
   for (const i of sp) assert.equal(b.cell[i], WALL);
 });
 
+test('раптова смерть: результат відомий — стіни після нього не падають (й ті, що впали пізніше, — перерахунок)', () => {
+  const m = emptyMap(), sd = suddenDeath(m);
+  const b = new Board(m, 1000), at0 = 1000 + sd.after;
+  b.advance(at0 + sd.step * 5);                        // 6 стін
+  b.stopWalls(at0 + sd.step * 2.5);                    // хост: результат відомий після 3-ї
+  b.advance(at0 + sd.step * 40);
+  const sp = spiral(m), walls = sp.filter(i => b.cell[i] === WALL).length;
+  assert.equal(walls, 3);
+  assert.equal(b.sdStarted(at0 + sd.step * 3), false);
+  const c = new Board(m, 1000);                        // ще до початку — не почнеться зовсім
+  c.stopWalls(at0 - 5000);
+  c.advance(at0 + sd.step * 40);
+  assert.equal(sp.filter(i => c.cell[i] === WALL).length, 0);
+  assert.equal(c.sdStarted(at0 + 1), false);
+});
+
 test('знімок для глядача: поле з знімка й подальші події дають той самий стан', () => {
   const m = makeMap(11, 1);
   const host = new Board(m, 0);

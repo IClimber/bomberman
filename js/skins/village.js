@@ -162,15 +162,8 @@ function wall(g, s) {
 
 // Бонуси на рушнику з вишитою облямівкою
 function item(g, k, s) {
-  const p = s * 0.1, cx = s / 2, cy = s / 2;
-  g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(p + s * 0.03, p + s * 0.05, s - 2 * p, s - 2 * p);
-  g.fillStyle = '#fbf6ea'; g.fillRect(p, p, s - 2 * p, s - 2 * p);
-  const u = Math.max(1, s * 0.035);
-  for (let j = 0; j < 9; j++) {                                      // облямівка: червоні й чорні хрестики
-    const t = p + u + j * (s - 2 * p - 3 * u) / 8;
-    g.fillStyle = j % 2 ? '#1a1a1a' : RED;
-    for (const [x, y] of [[t, p + u * 0.5], [t, s - p - u * 1.5], [p + u * 0.5, t], [s - p - u * 1.5, t]]) g.fillRect(x, y, u, u);
-  }
+  const cx = s / 2, cy = s / 2;
+  ellipse(g, cx, s * 0.82, s * 0.26, s * 0.07, 'rgba(20,50,10,0.35)');       // без рамки — лише тінь на траві
   if (k === IT_BOMB) makitra(g, cx, cy + s * 0.04, s * 0.18, false);
   else if (k === IT_FIRE) {                                          // червоний перець
     g.fillStyle = '#d32f2f';

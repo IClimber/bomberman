@@ -5,7 +5,7 @@ import {
   MODE_VS, MODE_COOP, RES_WIN, RES_DRAW, RES_NOBODY, RES_TEAM_WIN, RES_TEAM_LOSS, RES_GOING, END_GRACE_MS,
 } from '../js/round.js';
 import {
-  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, RESIST_MS, MAX_BOMBS, BLOCK, EMPTY, MON, FUSE_MS, FLAME_MS, makeMap, Board, cellOf,
+  IT_BOMB, IT_FIRE, IT_SPEED, IT_PASS, IT_RESIST, RESIST_MS, MAX_BOMBS, BLOCK, EMPTY, WALL, MON, FUSE_MS, FLAME_MS, makeMap, Board, cellOf,
 } from '../js/sim.js';
 import { monsterReach, TOUCH } from '../js/round.js';
 import { monsterStep } from '../js/monsters.js';
@@ -80,6 +80,24 @@ test('кінець раунду — після END_GRACE_MS, з підсумко
   assert.equal(checkEnd(R, 1000 + END_GRACE_MS), true);
   assert.equal(R.p, 1);
   assert.equal(R.res, RES_DRAW);
+});
+
+test('кінець раунду зупиняє раптову смерть з моменту, коли результат настав; «Гра продовжується» — ні', () => {
+  const R = newRound({ r: 1, seed: 5, m: MODE_VS, s: 0, d: 1, t0: 0, sl: people(2) });
+  const sd = R.board.sdAt;
+  kill(R, 1, sd - 3000);
+  checkEnd(R, sd - 3000);
+  assert.equal(checkEnd(R, sd - 3000 + END_GRACE_MS), true);
+  assert.equal(R.se, sd - 3000);
+  R.board.advance(sd + 60000);
+  assert.ok(!R.board.cell.includes(WALL));
+  const C = newRound({ r: 1, seed: 5, m: MODE_COOP, s: 0, d: 1, t0: 0, sl: people(1, 1) });
+  kill(C, 0, 1000);
+  checkEnd(C, 1000);
+  assert.equal(checkEnd(C, 1000 + END_GRACE_MS), true);
+  assert.equal(C.res, RES_GOING);
+  assert.equal(C.se, undefined);
+  assert.equal(C.board.wallEnd, Infinity);
 });
 
 test('бонуси і смертельні клітинки', () => {

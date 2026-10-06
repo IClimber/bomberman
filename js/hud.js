@@ -131,7 +131,7 @@ export function renderHud(now) {
     chipsKey = key;
     $('chips').replaceChildren(...chipEls(items));
   }
-  const sd = R.board.sdAt, left = now < R.t0 ? sd - R.t0 : sd - now;
+  const sd = R.board.sdAt, left = now < R.t0 ? sd - R.t0 : sd - Math.min(now, R.board.wallEnd);   // результат відомий — стоїть
   timer.classList.toggle('sd', left <= 0);
   setText(timer, left > 0 ? fmt(left) : SD_TEXT);
 

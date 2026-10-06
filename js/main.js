@@ -264,7 +264,7 @@ function roundCues(R, now) {
     const sec = Math.ceil((R.t0 - now) / 1000);
     if (sec !== cue.beep && sec <= 3) { cue.beep = sec; sfx.beep(sec <= 0); }
   }
-  if (!cue.sd && R.p === 0 && now >= R.board.sdAt) { cue.sd = true; sfx.sudden(); }
+  if (!cue.sd && R.p === 0 && R.board.sdStarted(now)) { cue.sd = true; sfx.sudden(); }
   if (!cue.end && R.p === 1 && R.res !== RES_GOING) {
     cue.end = true;
     if (S.mySlot >= 0) {

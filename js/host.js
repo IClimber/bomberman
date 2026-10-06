@@ -140,7 +140,7 @@ export function sendWorld(to) {
   if (!to) lastWorld = performance.now();
   const ts = Number.isFinite(R.board.T) ? R.board.T : 0, dg = R.board.digest(ts - SYNC_LAG);
   net.send('world', {
-    r: R.r, p: R.p, m: R.m, s: R.s, d: R.d, t0: R.t0, ts, k: R.res, wn: R.wn, en: dg.n, eh: dg.h,
+    r: R.r, p: R.p, m: R.m, s: R.s, d: R.d, t0: R.t0, ts, k: R.res, wn: R.wn, en: dg.n, eh: dg.h, se: R.se || 0,
     sl: R.sl.map(s => ({
       i: s.i, b: s.b, c: s.c, n: s.n, a: s.a, kb: s.kb, x: q8(s.x), y: q8(s.y), dr: s.dr, mv: s.mv,
       nb: s.nb, fp: s.fp, sp: s.sp, ps: s.ps, rs: s.rs, rc: s.rc,

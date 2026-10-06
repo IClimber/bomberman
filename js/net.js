@@ -50,6 +50,7 @@ export const net = createNet({
         g: 'bytes',
         bo: [BOMB],
         en: 'u16', eh: 'u32',                                         // контрольна сума подій з часом ≤ ts − SYNC_LAG
+        se: 'f64',                                                    // з цього часу стіни не падають (результат відомий; 0 — ні)
       },
     },
     // Учасник пропустив події (зв'язок рвався, сторінку заморожено): звіряємося з хостом
@@ -223,6 +224,7 @@ function applyWorld(w) {
   const now = net.sharedNow(), past = fresh ? R.t0 : now;          // коли загинули ті, про кого дізнались лише зараз
   R.worldAt = performance.now();
   R.p = w.p; R.res = w.k; R.wn = w.wn;
+  if (w.se) { R.se = w.se; R.board.stopWalls(w.se); }
   w.sl.forEach((e, k) => {
     const s = R.sl[k];
     if (!s) return;

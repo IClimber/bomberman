@@ -168,7 +168,7 @@ export function createRenderer(canvas) {
     if (T < R.t0 + 700 && R.p === 0) {
       const left = R.t0 - T;
       bigText(left > 0 ? String(Math.ceil(left / 1000)) : 'СТАРТ!', 1 - ((left % 1000) + 1000) % 1000 / 1000);
-    } else if (R.p === 0 && T >= B.sdAt && T < B.sdAt + 2200) {
+    } else if (R.p === 0 && B.sdStarted(T) && T < B.sdAt + 2200) {
       bigText('РАПТОВА СМЕРТЬ!', 0, '#ff5a4f');
     }
   }

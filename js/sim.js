@@ -229,6 +229,7 @@ export class Board {
     this.order = spiral(map);
     this.wallAt = new Float64Array(map.GW * map.GH).fill(Infinity);
     this.order.forEach((i, k) => { this.wallAt[i] = this.sdAt + k * sd.step; });
+    this.wallEnd = Infinity;         // після цього стіни не падають (stopWalls)
     this.bombs = new Map();          // усі відомі бомби раунду: ключ → { o, n, x, y, t, p, rc, h }
     this.maxN = [];                  // найбільший відомий номер бомби слоту — бот продовжує з нього
     this.picks = new Map();          // усі підбори: ключ → { o, x, y, t }
@@ -475,7 +476,19 @@ export class Board {
   remoteOf(o) {
     return [...this.active.values()].filter(a => a.b.o === o && a.te === Infinity).sort((x, y) => bombLess(x.b, y.b) ? -1 : 1);
   }
-  sdStarted(T = this.T) { return T >= this.sdAt; }
+  sdStarted(T = this.T) { return T >= this.sdAt && T <= this.wallEnd; }
+  // Результат раунду вже відомий (виграш, програш): стіни після T не падають. Ті, що вже впали після T
+  // (хост повідомив із запізненням), — перерахунок з початку
+  stopWalls(T) {
+    if (T >= this.wallEnd) return false;
+    this.wallEnd = T;
+    for (const i of this.order) {
+      if (this.wallAt[i] <= T) continue;
+      if (this.wallAt[i] <= this.T) { this.dirty = true; this.lateBy = { kind: 'walls', key: '', t: T, T: this.T }; }
+      this.wallAt[i] = Infinity;
+    }
+    return true;
+  }
 
   // Знімок для глядачів: на клітинку байт — вид (2 біти), бонус (3 біти), бонус видно (1 біт); блок, що горить, — уже порожньо
   snapshot() {
