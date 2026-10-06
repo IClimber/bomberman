@@ -4,27 +4,32 @@ let muted = false;
 try { muted = localStorage.getItem('crossbomb-mute') === '1'; } catch {}
 
 export const isMuted = () => muted;
-export const audioCtx = () => ac;                                  // для музики (music.js), з'являється після unlock
+export const audioCtx = () => ac;                                  // для музики (music.js)
 export function setMuted(v) {
   muted = !!v;
   try { localStorage.setItem('crossbomb-mute', muted ? '1' : '0'); } catch {}
   if (master) master.gain.value = muted ? 0 : 0.55;
 }
-// Браузер дозволяє звук лише після дії користувача: клавіша, клік, а на тачскріні — коли палець відпускають
+// Контекст створюємо одразу при завантаженні: якщо браузер дозволяє звук без дії на цій сторінці (оновлення вкладки
+// після взаємодії, дозволене автовідтворення сайту), він одразу `running` і музика грає сама.
+function create() {
+  if (ac) return true;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return false;
+  ac = new AC();
+  master = ac.createGain();
+  master.gain.value = muted ? 0 : 0.55;
+  master.connect(ac.destination);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return true;
+}
+create();
+// Інакше браузер дозволяє звук лише після дії користувача: клавіша, клік, а на тачскріні — коли палець відпускають
 // (pointerup / touchend, але не pointerdown). Викликаємо на кожній такій дії, доки звук не запрацює.
 export function unlock() {
-  if (!ac) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    ac = new AC();
-    master = ac.createGain();
-    master.gain.value = muted ? 0 : 0.55;
-    master.connect(ac.destination);
-    noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
-    const d = noiseBuf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  }
-  if (ac.state === 'running') return;
+  if (!create() || ac.state === 'running') return;
   ac.resume().catch(() => {});
   const s = ac.createBufferSource();                                // iOS: звук «відмикається» лише відтворенням у самій дії
   s.buffer = ac.createBuffer(1, 1, ac.sampleRate);

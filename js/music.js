@@ -229,7 +229,7 @@ export function setMusicOff(v) {
 }
 
 let ctx = () => null, which = () => 0, bus = null, cur = null;
-// Запускає програвач: ac() — аудіоконтекст (з'являється після дії користувача), idx() — номер стилю кімнати
+// Запускає програвач: ac() — аудіоконтекст (грає, лише коли він `running`), idx() — номер стилю кімнати
 export function initMusic(ac, idx) {
   ctx = ac;
   which = idx;
