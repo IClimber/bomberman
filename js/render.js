@@ -29,6 +29,12 @@ export function createRenderer(canvas) {
   function layoutFor(map, ins) {
     const { top, bottom, left, right } = ins || { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN };
     const t = top * dpr, b = bottom * dpr, l = left * dpr, r = right * dpr;
+    if (ins?.under) {
+      // поле на весь екран, а HUD (висота t) закриває лише верхній ряд рамки: вищий за клітинку —
+      // клітинка менша, щоб верхній ігровий ряд починався не вище t
+      const ts = Math.max(6, Math.floor(Math.min(W / map.GW, H / map.GH, (H - t) / (map.GH - 1))));
+      return { ts, ox: Math.floor((W - ts * map.GW) / 2), oy: Math.floor(Math.max(t - ts, (H - ts * map.GH) / 2)) };
+    }
     const ts = Math.max(6, Math.floor(Math.min((W - l - r) / map.GW, (H - t - b) / map.GH)));
     return { ts, ox: Math.floor(l + (W - l - r - ts * map.GW) / 2), oy: Math.floor(t + (H - t - b - ts * map.GH) / 2) };
   }

@@ -329,10 +329,12 @@ function frame() {
   });
 }
 // Місце під інтерфейс навколо поля (CSS px): HUD зверху; на комп'ютері — напис глядача знизу,
-// на телефоні — стрілки й бомба (портрет — знизу, альбом — з боків)
+// на телефоні — стрілки й бомба (портрет — знизу, альбом — з боків). На комп'ютері в повноекранному
+// режимі поле — до країв екрана, HUD і напис глядача лягають на рамку (under; див. layoutFor)
 let padSize = { pad: 150, btn: 96, w: 0, h: 0 };
 function insets() {
   const top = $('hud').classList.contains('show') ? hudBottom() + 6 : 62;
+  if (!isTouch && document.fullscreenElement) return { top: hudBottom(), bottom: 0, left: 0, right: 0, under: true };
   if (!isTouch) return { top, bottom: 48, left: 14, right: 14 };
   if (padSize.w !== innerWidth || padSize.h !== innerHeight) {
     const css = getComputedStyle(document.documentElement);
